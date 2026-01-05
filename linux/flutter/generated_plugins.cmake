@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  media_browser
   media_kit_libs_linux
 )
 

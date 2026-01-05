@@ -1,6 +1,6 @@
 # Privacy Policy for QuickPlayer
 
-**Last Updated: December 2024**
+**Last Updated: January 2025**
 
 ## Overview
 
@@ -19,16 +19,33 @@ QuickPlayer is designed with privacy in mind. We do **NOT** collect, store, or t
 - Audio files or recordings
 - Any data to external servers
 
+### Permissions Required
+
+The App requests the following permissions to enable device audio browsing:
+
+| Permission | Purpose | Platform |
+|------------|---------|----------|
+| READ_MEDIA_AUDIO | Browse and play audio files stored on your device | Android 13+ |
+| READ_EXTERNAL_STORAGE | Browse and play audio files stored on your device | Android 12 and below |
+
+**Important**:
+- We only read audio file metadata (title, artist, duration, file path) to display your music library
+- Audio files are played directly from their original location on your device
+- Audio files are **NOT** copied, uploaded, or transmitted anywhere
+- You can revoke these permissions at any time in your device settings
+
 ### Information Stored Locally
 
 The following data is stored **only on your device** and never transmitted:
 
 | Data Type | Purpose | Storage Location |
 |-----------|---------|------------------|
-| Imported audio files | Music playback | Device storage |
+| Imported audio files | Music playback | App internal storage |
+| Device audio file list | Cache for faster loading | App local storage |
 | Playback settings | Speed, pitch preferences | App local storage |
 | Markers and bookmarks | Practice session management | App local storage |
 | A-B loop points | Loop practice feature | App local storage |
+| Playlists | Organize your practice tracks | App local storage |
 
 ## Data Storage and Security
 
@@ -82,8 +99,9 @@ If you have any questions about this Privacy Policy, please contact us at:
 | Do we collect personal data? | No |
 | Do we share data with third parties? | No |
 | Is data stored on external servers? | No |
-| Can you delete your data? | Yes, by uninstalling the App |
+| Do we upload your audio files? | No |
+| Can you delete your data? | Yes, by uninstalling the App or within the App |
 
 ---
 
-*This privacy policy is effective as of December 2024.*
+*This privacy policy is effective as of January 2025.*

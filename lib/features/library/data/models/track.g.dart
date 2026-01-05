@@ -27,13 +27,14 @@ class TrackAdapter extends TypeAdapter<Track> {
       lastPlayedAt: fields[7] as DateTime?,
       bpm: fields[8] as int?,
       musicalKey: fields[9] as String?,
+      isExternal: fields[10] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Track obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +54,9 @@ class TrackAdapter extends TypeAdapter<Track> {
       ..writeByte(8)
       ..write(obj.bpm)
       ..writeByte(9)
-      ..write(obj.musicalKey);
+      ..write(obj.musicalKey)
+      ..writeByte(10)
+      ..write(obj.isExternal);
   }
 
   @override

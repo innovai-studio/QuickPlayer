@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 12 and below -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+
+    <!-- Android 13+ fine-grained media permissions -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+
     <application
         android:label="quickplayer"
         android:name="${applicationName}"

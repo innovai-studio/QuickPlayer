@@ -1,7 +1,7 @@
 name: quickplayer
 description: "Music practice assistant with speed/pitch control and A-B loop"
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.1.0+4
 
 environment:
   sdk: ^3.6.1
@@ -33,6 +33,9 @@ dependencies:
 
   # File Picker
   file_picker: ^8.1.6
+
+  # Device Audio Query (Cross-platform)
+  media_browser: ^1.1.5
 
   # Utils
   uuid: ^4.5.1

@@ -121,10 +121,15 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       final duration = await _audioService.loadFile(track.filePath);
       final markers = _storage.getMarkersForTrack(track.id);
 
-      // Update last played
-      final updatedTrack = track.copyWith(lastPlayedAt: DateTime.now());
-      await _storage.saveTrack(updatedTrack);
-      await _storage.setLastTrackId(track.id);
+      // Update last played (only for non-external tracks)
+      Track updatedTrack;
+      if (!track.isExternal) {
+        updatedTrack = track.copyWith(lastPlayedAt: DateTime.now());
+        await _storage.saveTrack(updatedTrack);
+        await _storage.setLastTrackId(track.id);
+      } else {
+        updatedTrack = track;
+      }
 
       state = state.copyWith(
         currentTrack: updatedTrack,
@@ -146,6 +151,68 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to load track: $e',
+      );
+    }
+  }
+
+  /// Load and play audio directly from file path (for device audio)
+  /// Creates a temporary Track object without saving to storage
+  Future<void> loadFromPath({
+    required String filePath,
+    required String title,
+    String? artist,
+    int? durationMs,
+  }) async {
+    // Create a temporary Track object (not saved to Hive)
+    final tempTrack = Track(
+      id: 'device_${filePath.hashCode}',
+      name: title,
+      filePath: filePath,
+      durationMs: durationMs ?? 0,
+      fileSize: 0,
+      createdAt: DateTime.now(),
+      isExternal: true,
+    );
+
+    try {
+      state = state.copyWith(
+        isLoading: true,
+        clearError: true,
+        currentTrack: tempTrack,
+        position: Duration.zero,
+        duration: Duration.zero,
+        clearAbLoop: true,
+        // Clear queue since this is a single track play
+        queue: [tempTrack],
+        currentIndex: 0,
+      );
+
+      // Check if file exists
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw Exception('Audio file not found: $filePath');
+      }
+
+      // Load file
+      final duration = await _audioService.loadFile(filePath);
+      final markers = _storage.getMarkersForTrack(tempTrack.id);
+
+      state = state.copyWith(
+        currentTrack: tempTrack.copyWith(
+          durationMs: duration?.inMilliseconds ?? durationMs ?? 0,
+        ),
+        duration: duration ?? Duration.zero,
+        position: Duration.zero,
+        markers: markers,
+        isLoading: false,
+        clearAbLoop: true,
+      );
+
+      await _audioService.play();
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Failed to load audio: $e',
       );
     }
   }

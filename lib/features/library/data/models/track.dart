@@ -34,6 +34,10 @@ class Track extends HiveObject {
   @HiveField(9)
   String? musicalKey;
 
+  /// Whether this track is from external storage (not copied to app directory)
+  @HiveField(10)
+  final bool isExternal;
+
   Track({
     required this.id,
     required this.name,
@@ -45,6 +49,7 @@ class Track extends HiveObject {
     this.lastPlayedAt,
     this.bpm,
     this.musicalKey,
+    this.isExternal = false,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -60,6 +65,7 @@ class Track extends HiveObject {
     DateTime? lastPlayedAt,
     int? bpm,
     String? musicalKey,
+    bool? isExternal,
   }) {
     return Track(
       id: id ?? this.id,
@@ -72,6 +78,7 @@ class Track extends HiveObject {
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
       bpm: bpm ?? this.bpm,
       musicalKey: musicalKey ?? this.musicalKey,
+      isExternal: isExternal ?? this.isExternal,
     );
   }
 

@@ -43,13 +43,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       return;
     }
 
+    // Device audio tracks (IDs starting with "device_") are loaded via loadFromPath
+    // and won't be in StorageService. They're already loaded by the player provider.
+    if (widget.trackId.startsWith('device_')) {
+      // Device audio should already be loaded by loadFromPath call before navigation
+      // If somehow not loaded yet, just return (the UI will show loading state)
+      return;
+    }
+
     final storage = StorageService();
     await storage.init();
     final track = storage.getTrack(widget.trackId);
     if (track != null) {
       ref.read(playerProvider.notifier).loadTrack(track);
     } else {
-      // Track not found (possibly deleted)
+      // Track not found (possibly deleted) - only for imported tracks
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Track not found')),

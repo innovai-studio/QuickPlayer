@@ -161,4 +161,71 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   void setSearchQuery(String query) {
     state = state.copyWith(searchQuery: query);
   }
+
+  /// Import a single audio file from device path (doesn't copy, references original)
+  /// Returns the created Track or null if failed
+  Future<Track?> importFromPath({
+    required String filePath,
+    required String title,
+    String? artist,
+    int? durationMs,
+    int? fileSize,
+  }) async {
+    try {
+      await _storage.init();
+
+      // Check if this file is already imported
+      final existingTracks = _storage.getAllTracks();
+      final existing = existingTracks.where((t) => t.filePath == filePath).firstOrNull;
+      if (existing != null) {
+        return existing; // Already imported
+      }
+
+      // Get duration if not provided
+      int duration = durationMs ?? 0;
+      if (duration == 0) {
+        try {
+          final player = AudioPlayer();
+          final dur = await player.setFilePath(filePath);
+          duration = dur?.inMilliseconds ?? 0;
+          await player.dispose();
+        } catch (_) {}
+      }
+
+      // Get file size if not provided
+      int size = fileSize ?? 0;
+      if (size == 0) {
+        try {
+          final file = File(filePath);
+          size = await file.length();
+        } catch (_) {}
+      }
+
+      final trackId = _uuid.v4();
+      final track = Track(
+        id: trackId,
+        name: title,
+        filePath: filePath,
+        durationMs: duration,
+        fileSize: size,
+        createdAt: DateTime.now(),
+        isExternal: true, // Mark as external (not copied to app directory)
+      );
+
+      await _storage.saveTrack(track);
+
+      // Update state
+      state = state.copyWith(tracks: [track, ...state.tracks]);
+
+      return track;
+    } catch (e) {
+      state = state.copyWith(error: 'Failed to import file: $e');
+      return null;
+    }
+  }
+
+  /// Check if a file path is already imported
+  bool isFileImported(String filePath) {
+    return state.tracks.any((t) => t.filePath == filePath);
+  }
 }

@@ -7,9 +7,44 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+
+    // Fix for AGP 8.x namespace requirement - set namespace during plugin application
+    project.plugins.withId("com.android.library") {
+        project.android {
+            if (namespace == null || namespace.isEmpty()) {
+                // Use the package name from AndroidManifest.xml if available
+                def manifestFile = file("${project.projectDir}/src/main/AndroidManifest.xml")
+                if (manifestFile.exists()) {
+                    def manifest = new XmlSlurper().parse(manifestFile)
+                    def packageName = manifest.@package.toString()
+                    if (packageName && !packageName.isEmpty()) {
+                        namespace = packageName
+                    } else {
+                        namespace = "com.plugin.${project.name.replace('-', '_').replace(':', '_')}"
+                    }
+                } else {
+                    namespace = "com.plugin.${project.name.replace('-', '_').replace(':', '_')}"
+                }
+            }
+            // Set JVM target for library modules
+            compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
+    }
+
+    // Fix Kotlin JVM target for all modules
+    project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
