@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f0f23"/>
+    </linearGradient>
+    <!-- Accent gradient -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="100%" style="stop-color:#8B5CF6"/>
+    </linearGradient>
+    <!-- Text gradient -->
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFFFFF"/>
+      <stop offset="100%" style="stop-color:#C7D2FE"/>
+    </linearGradient>
+    <!-- Speed gradient -->
+    <linearGradient id="speedGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#34D399"/>
+      <stop offset="100%" style="stop-color:#10B981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1024" height="500" fill="url(#bgGrad)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="900" cy="100" r="200" fill="url(#accentGrad)" opacity="0.1"/>
+  <circle cx="100" cy="400" r="150" fill="url(#accentGrad)" opacity="0.08"/>
+
+  <!-- Waveform decoration (background) -->
+  <g opacity="0.15" transform="translate(0, 250)">
+    <rect x="50" y="-30" width="8" height="60" rx="4" fill="#6366F1"/>
+    <rect x="70" y="-50" width="8" height="100" rx="4" fill="#6366F1"/>
+    <rect x="90" y="-70" width="8" height="140" rx="4" fill="#6366F1"/>
+    <rect x="110" y="-40" width="8" height="80" rx="4" fill="#6366F1"/>
+    <rect x="130" y="-60" width="8" height="120" rx="4" fill="#6366F1"/>
+    <rect x="150" y="-35" width="8" height="70" rx="4" fill="#6366F1"/>
+    <rect x="870" y="-30" width="8" height="60" rx="4" fill="#8B5CF6"/>
+    <rect x="890" y="-55" width="8" height="110" rx="4" fill="#8B5CF6"/>
+    <rect x="910" y="-45" width="8" height="90" rx="4" fill="#8B5CF6"/>
+    <rect x="930" y="-65" width="8" height="130" rx="4" fill="#8B5CF6"/>
+    <rect x="950" y="-40" width="8" height="80" rx="4" fill="#8B5CF6"/>
+    <rect x="970" y="-50" width="8" height="100" rx="4" fill="#8B5CF6"/>
+  </g>
+
+  <!-- App Icon (small version) -->
+  <g transform="translate(80, 160)">
+    <rect x="0" y="0" width="180" height="180" rx="36" fill="url(#accentGrad)"/>
+    <circle cx="90" cy="90" r="60" fill="rgba(0,0,0,0.2)"/>
+    <path d="M 75 55 L 75 125 L 125 90 Z" fill="white"/>
+  </g>
+
+  <!-- App Name -->
+  <text x="300" y="230" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="url(#textGrad)">QuickPlayer</text>
+
+  <!-- Tagline -->
+  <text x="300" y="290" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#A5B4FC">Music Practice Tool</text>
+
+  <!-- Feature badges -->
+  <!-- Speed Control -->
+  <g transform="translate(300, 330)">
+    <rect x="0" y="0" width="160" height="50" rx="25" fill="rgba(99, 102, 241, 0.3)" stroke="#6366F1" stroke-width="2"/>
+    <text x="80" y="33" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#A5B4FC">Speed 0.25-2x</text>
+  </g>
+
+  <!-- Pitch Control -->
+  <g transform="translate(480, 330)">
+    <rect x="0" y="0" width="140" height="50" rx="25" fill="rgba(139, 92, 246, 0.3)" stroke="#8B5CF6" stroke-width="2"/>
+    <text x="70" y="33" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#C4B5FD">Pitch ±12</text>
+  </g>
+
+  <!-- A-B Loop -->
+  <g transform="translate(640, 330)">
+    <rect x="0" y="0" width="130" height="50" rx="25" fill="rgba(52, 211, 153, 0.3)" stroke="#34D399" stroke-width="2"/>
+    <text x="65" y="33" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#6EE7B7">A-B Loop</text>
+  </g>
+
+  <!-- Markers -->
+  <g transform="translate(790, 330)">
+    <rect x="0" y="0" width="120" height="50" rx="25" fill="rgba(251, 191, 36, 0.3)" stroke="#FBBF24" stroke-width="2"/>
+    <text x="60" y="33" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#FCD34D">Markers</text>
+  </g>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="490" width="1024" height="10" fill="url(#accentGrad)"/>
+</svg>

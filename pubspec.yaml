@@ -1,0 +1,61 @@
+name: quickplayer
+description: "Music practice assistant with speed/pitch control and A-B loop"
+publish_to: 'none'
+version: 1.0.2+3
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # Audio
+  just_audio: ^0.9.42
+  just_audio_media_kit: ^2.0.0
+  media_kit_libs_linux: any
+  audio_session: ^0.1.21
+  audio_waveforms: ^1.2.0
+
+  # Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5
+
+  # File Picker
+  file_picker: ^8.1.6
+
+  # Utils
+  uuid: ^4.5.1
+  intl: ^0.19.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  riverpod_generator: ^2.6.2
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
+  flutter_launcher_icons: ^0.14.2
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/store/icon_1024x1024.png"
+  adaptive_icon_background: "#6366F1"
+  adaptive_icon_foreground: "assets/store/icon_1024x1024.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/store/

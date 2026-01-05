@@ -1,0 +1,283 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../providers/settings_provider.dart';
+
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Default Speed Section
+          _buildSectionHeader('Playback Defaults'),
+          _buildCard(
+            children: [
+              _buildSettingRow(
+                'Default Speed',
+                '${settings.defaultSpeed.toStringAsFixed(2)}x',
+              ),
+              Slider(
+                value: settings.defaultSpeed,
+                min: AppConstants.minSpeed,
+                max: AppConstants.maxSpeed,
+                divisions: ((AppConstants.maxSpeed - AppConstants.minSpeed) /
+                        AppConstants.speedStep)
+                    .round(),
+                onChanged: (value) {
+                  ref.read(settingsProvider.notifier).setDefaultSpeed(value);
+                },
+              ),
+              const Divider(color: AppColors.divider),
+              _buildSettingRow(
+                'Default Pitch',
+                _formatPitch(settings.defaultPitchSemitones),
+              ),
+              Slider(
+                value: settings.defaultPitchSemitones.toDouble(),
+                min: AppConstants.minPitchSemitones.toDouble(),
+                max: AppConstants.maxPitchSemitones.toDouble(),
+                divisions: AppConstants.maxPitchSemitones -
+                    AppConstants.minPitchSemitones,
+                onChanged: (value) {
+                  ref
+                      .read(settingsProvider.notifier)
+                      .setDefaultPitchSemitones(value.round());
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Display Section
+          _buildSectionHeader('Display'),
+          _buildCard(
+            children: [
+              _buildSwitchRow(
+                'Show Waveform',
+                'Display audio waveform visualization',
+                settings.showWaveform,
+                (value) {
+                  ref.read(settingsProvider.notifier).setShowWaveform(value);
+                },
+              ),
+              const Divider(color: AppColors.divider),
+              _buildSwitchRow(
+                'Keep Screen On',
+                'Prevent screen from turning off during playback',
+                settings.keepScreenOn,
+                (value) {
+                  ref.read(settingsProvider.notifier).setKeepScreenOn(value);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // About Section
+          _buildSectionHeader('About'),
+          _buildCard(
+            children: [
+              _buildInfoRow('App Name', AppConstants.appName),
+              const Divider(color: AppColors.divider),
+              _buildInfoRow('Version', AppConstants.appVersion),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Reset Button
+          Center(
+            child: TextButton(
+              onPressed: () => _showResetDialog(context, ref),
+              child: const Text(
+                'Reset to Defaults',
+                style: TextStyle(color: AppColors.error),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard({required List<Widget> children}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildSettingRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.primaryStart,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitchRow(
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.primaryStart,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatPitch(int semitones) {
+    if (semitones == 0) return '0';
+    return semitones > 0 ? '+$semitones' : '$semitones';
+  }
+
+  void _showResetDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        title: const Text(
+          'Reset Settings',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Are you sure you want to reset all settings to defaults?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(settingsProvider.notifier).resetToDefaults();
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Reset',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
