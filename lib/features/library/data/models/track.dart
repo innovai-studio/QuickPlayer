@@ -35,7 +35,7 @@ class Track extends HiveObject {
   String? musicalKey;
 
   /// Whether this track is from external storage (not copied to app directory)
-  @HiveField(10)
+  @HiveField(10, defaultValue: false)
   final bool isExternal;
 
   Track({

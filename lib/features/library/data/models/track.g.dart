@@ -27,7 +27,7 @@ class TrackAdapter extends TypeAdapter<Track> {
       lastPlayedAt: fields[7] as DateTime?,
       bpm: fields[8] as int?,
       musicalKey: fields[9] as String?,
-      isExternal: fields[10] as bool,
+      isExternal: fields[10] == null ? false : fields[10] as bool,
     );
   }
 
