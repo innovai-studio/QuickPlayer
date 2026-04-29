@@ -1,0 +1,186 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/services.dart';
+
+/// Five Focus presets exposed in the UI. Index is persisted, so the order
+/// must remain stable -- append new values rather than reordering.
+enum EqPreset {
+  flat,
+  vocalBoost,
+  guitarBoost,
+  drumFocus,
+  bassCut,
+}
+
+extension EqPresetX on EqPreset {
+  /// Human-readable label shown on the Focus chip.
+  String get label {
+    switch (this) {
+      case EqPreset.flat:
+        return 'None';
+      case EqPreset.vocalBoost:
+        return 'Vocal';
+      case EqPreset.guitarBoost:
+        return 'Guitar';
+      case EqPreset.drumFocus:
+        return 'Drums';
+      case EqPreset.bassCut:
+        return 'Bass-';
+    }
+  }
+}
+
+/// Capabilities reported by the platform after init.
+class AudioEffectsCapabilities {
+  final bool supported;
+  final int numberOfBands;
+  final List<int> centerFrequenciesMilliHz;
+  final int minBandLevelMillibel;
+  final int maxBandLevelMillibel;
+  final bool hasBassBoost;
+
+  const AudioEffectsCapabilities({
+    required this.supported,
+    this.numberOfBands = 0,
+    this.centerFrequenciesMilliHz = const [],
+    this.minBandLevelMillibel = 0,
+    this.maxBandLevelMillibel = 0,
+    this.hasBassBoost = false,
+  });
+
+  static const unsupported = AudioEffectsCapabilities(supported: false);
+
+  factory AudioEffectsCapabilities.fromMap(Map<dynamic, dynamic> map) {
+    return AudioEffectsCapabilities(
+      supported: map['supported'] as bool? ?? false,
+      numberOfBands: map['numberOfBands'] as int? ?? 0,
+      centerFrequenciesMilliHz: (map['centerFrequenciesMilliHz'] as List?)
+              ?.map((e) => e as int)
+              .toList() ??
+          const [],
+      minBandLevelMillibel: map['minBandLevelMillibel'] as int? ?? 0,
+      maxBandLevelMillibel: map['maxBandLevelMillibel'] as int? ?? 0,
+      hasBassBoost: map['hasBassBoost'] as bool? ?? false,
+    );
+  }
+}
+
+/// Bridges to the Android AudioEffects MethodChannel.
+///
+/// On non-Android platforms every call short-circuits and reports
+/// "unsupported" without touching the channel, so callers don't need
+/// to gate behaviour on Platform.isAndroid themselves.
+class AudioEffectsService {
+  AudioEffectsService._internal();
+  static final AudioEffectsService _instance = AudioEffectsService._internal();
+  factory AudioEffectsService() => _instance;
+
+  static const _channel = MethodChannel('com.quickplayer/audio_effects');
+
+  AudioEffectsCapabilities _capabilities = AudioEffectsCapabilities.unsupported;
+  int? _boundSessionId;
+  EqPreset _activePreset = EqPreset.flat;
+
+  AudioEffectsCapabilities get capabilities => _capabilities;
+  EqPreset get activePreset => _activePreset;
+
+  /// Whether the current device + platform combination can apply EQ presets.
+  bool get isAvailable => Platform.isAndroid && _capabilities.supported;
+
+  /// Bind effects to the AudioTrack session reported by just_audio.
+  /// Safe to call repeatedly with the same id; will rebuild on a new id.
+  Future<void> attachToSession(int sessionId) async {
+    if (!Platform.isAndroid) {
+      _capabilities = AudioEffectsCapabilities.unsupported;
+      return;
+    }
+    if (sessionId == 0 || sessionId == _boundSessionId) return;
+
+    try {
+      final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'init',
+        {'sessionId': sessionId},
+      );
+      _capabilities = result == null
+          ? AudioEffectsCapabilities.unsupported
+          : AudioEffectsCapabilities.fromMap(result);
+      _boundSessionId = sessionId;
+
+      // Re-apply the active preset against the freshly-bound session.
+      if (_capabilities.supported && _activePreset != EqPreset.flat) {
+        await applyPreset(_activePreset);
+      }
+    } on PlatformException {
+      _capabilities = AudioEffectsCapabilities.unsupported;
+    }
+  }
+
+  /// Apply a preset. No-op when effects aren't available -- callers can
+  /// still call this freely on iOS / Linux without checking platform.
+  Future<void> applyPreset(EqPreset preset) async {
+    _activePreset = preset;
+    if (!isAvailable) return;
+
+    final config = _presetConfig(preset);
+    try {
+      await _channel.invokeMethod<void>('applyPreset', {
+        'bandLevels': config.bandLevelsMillibel,
+        'bassStrength': config.bassStrengthMilli,
+      });
+    } on PlatformException {
+      // Swallow -- we'll surface a single capability flag instead of erroring
+      // every call. The next attachToSession will re-detect support.
+    }
+  }
+
+  /// Master toggle. Use sparingly -- applying EqPreset.flat already produces
+  /// silence-on-the-EQ behaviour.
+  Future<void> setEnabled(bool enabled) async {
+    if (!isAvailable) return;
+    try {
+      await _channel.invokeMethod<void>('setEnabled', {'enabled': enabled});
+    } on PlatformException {
+      // ignore
+    }
+  }
+
+  Future<void> release() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('release');
+    } on PlatformException {
+      // ignore
+    }
+    _boundSessionId = null;
+    _capabilities = AudioEffectsCapabilities.unsupported;
+  }
+
+  /// 5-band preset table.
+  ///
+  /// Bands map to roughly 60 / 230 / 910 / 3.6k / 14k Hz on a typical
+  /// device. The Kotlin handler interpolates onto whatever band count
+  /// the device exposes, so these values stay device-independent.
+  ///
+  /// Levels are millibel (100 == +1 dB). Bass strength is milli-units
+  /// (0..1000) for android.media.audiofx.BassBoost.
+  _PresetConfig _presetConfig(EqPreset preset) {
+    switch (preset) {
+      case EqPreset.flat:
+        return const _PresetConfig([0, 0, 0, 0, 0], 0);
+      case EqPreset.vocalBoost:
+        return const _PresetConfig([-300, -200, 400, 500, 0], 0);
+      case EqPreset.guitarBoost:
+        return const _PresetConfig([-200, 0, 300, 400, 200], 0);
+      case EqPreset.drumFocus:
+        return const _PresetConfig([400, 200, -200, 0, 300], 600);
+      case EqPreset.bassCut:
+        return const _PresetConfig([-800, -400, 0, 0, 0], 0);
+    }
+  }
+}
+
+class _PresetConfig {
+  final List<int> bandLevelsMillibel;
+  final int bassStrengthMilli;
+  const _PresetConfig(this.bandLevelsMillibel, this.bassStrengthMilli);
+}

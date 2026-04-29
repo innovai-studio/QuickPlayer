@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:math';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
+import 'audio_effects_service.dart';
 
 class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
+  final AudioEffectsService _effects = AudioEffectsService();
+  StreamSubscription<int?>? _sessionIdSubscription;
 
   // Streams
   Stream<Duration> get positionStream => _player.positionStream;
@@ -26,6 +29,9 @@ class AudioPlayerService {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
+    _sessionIdSubscription = _player.androidAudioSessionIdStream.listen((id) {
+      if (id != null) _effects.attachToSession(id);
+    });
   }
 
   /// Load audio from file path
@@ -96,6 +102,8 @@ class AudioPlayerService {
 
   /// Dispose
   Future<void> dispose() async {
+    await _sessionIdSubscription?.cancel();
+    await _effects.release();
     await _player.dispose();
   }
 }
