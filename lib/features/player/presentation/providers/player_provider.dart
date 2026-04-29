@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/audio/audio_player_service.dart';
 import '../../../../core/audio/audio_analyzer_service.dart';
 import '../../../../core/storage/storage_service.dart';
@@ -20,6 +21,7 @@ final playerProvider = StateNotifierProvider<PlayerNotifier, AppPlayerState>((re
 class PlayerNotifier extends StateNotifier<AppPlayerState> {
   final AudioPlayerService _audioService = AudioPlayerService();
   final AudioAnalyzerService _analyzerService = AudioAnalyzerService();
+  final AudioEffectsService _effectsService = AudioEffectsService();
   final StorageService _storage = StorageService();
   final _uuid = const Uuid();
   final _random = math.Random();
@@ -53,7 +55,19 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       if (playerState.processingState == ProcessingState.completed) {
         _onTrackComplete();
       }
+      // Effects capability becomes known after the first audio session id
+      // arrives -- piggy-back on player state updates to surface it.
+      if (_effectsService.isAvailable != state.focusAvailable) {
+        state = state.copyWith(focusAvailable: _effectsService.isAvailable);
+      }
     });
+  }
+
+  /// Apply a Focus EQ preset. No-op effectively when device doesn't
+  /// support effects, but state still updates so the UI reflects intent.
+  Future<void> setFocusMode(EqPreset preset) async {
+    await _effectsService.applyPreset(preset);
+    state = state.copyWith(focusMode: preset);
   }
 
   /// Handle track completion based on play mode

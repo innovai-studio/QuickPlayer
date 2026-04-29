@@ -14,6 +14,7 @@ import '../widgets/playback_controls.dart';
 import '../widgets/speed_control.dart';
 import '../widgets/pitch_control.dart';
 import '../widgets/ab_loop_control.dart';
+import '../widgets/focus_mode_control.dart';
 import '../widgets/marker_list.dart';
 import '../widgets/waveform_view.dart';
 
@@ -168,6 +169,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             .setPitchSemitones(semitones),
                       ),
                       const SizedBox(height: 16),
+
+                      // Focus EQ (hidden on devices without AudioEffect)
+                      FocusModeControl(
+                        preset: playerState.focusMode,
+                        available: playerState.focusAvailable,
+                        onChanged: (preset) => ref
+                            .read(playerProvider.notifier)
+                            .setFocusMode(preset),
+                      ),
+                      if (playerState.focusAvailable)
+                        const SizedBox(height: 16),
 
                       // A-B Loop control
                       ABLoopControl(

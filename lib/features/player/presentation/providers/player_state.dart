@@ -1,3 +1,4 @@
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../data/models/ab_loop.dart';
 import '../../data/models/marker.dart';
 import '../../data/models/play_mode.dart';
@@ -23,6 +24,10 @@ class AppPlayerState {
   final String? queueSourceId; // null = Library, otherwise playlist ID
   final List<int>? shuffleOrder; // Shuffle indices when in shuffle mode
 
+  // Focus EQ
+  final EqPreset focusMode;
+  final bool focusAvailable;
+
   const AppPlayerState({
     this.currentTrack,
     this.isPlaying = false,
@@ -40,6 +45,8 @@ class AppPlayerState {
     this.playMode = PlayMode.sequential,
     this.queueSourceId,
     this.shuffleOrder,
+    this.focusMode = EqPreset.flat,
+    this.focusAvailable = false,
   });
 
   /// Whether there's a next track in the queue
@@ -81,6 +88,8 @@ class AppPlayerState {
     PlayMode? playMode,
     String? queueSourceId,
     List<int>? shuffleOrder,
+    EqPreset? focusMode,
+    bool? focusAvailable,
     bool clearTrack = false,
     bool clearAbLoop = false,
     bool clearError = false,
@@ -104,6 +113,8 @@ class AppPlayerState {
       playMode: playMode ?? this.playMode,
       queueSourceId: queueSourceId ?? this.queueSourceId,
       shuffleOrder: clearShuffleOrder ? null : (shuffleOrder ?? this.shuffleOrder),
+      focusMode: focusMode ?? this.focusMode,
+      focusAvailable: focusAvailable ?? this.focusAvailable,
     );
   }
 }
