@@ -17,10 +17,15 @@ import kotlin.math.PI
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.quickplayer/audio_analyzer"
+    private val EFFECTS_CHANNEL = "com.quickplayer/audio_effects"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val effectsHandler = AudioEffectsHandler()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, EFFECTS_CHANNEL)
+            .setMethodCallHandler(effectsHandler)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -366,5 +371,6 @@ class MainActivity: FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
+        effectsHandler.release()
     }
 }
