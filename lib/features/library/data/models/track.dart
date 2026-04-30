@@ -38,6 +38,12 @@ class Track extends HiveObject {
   @HiveField(10, defaultValue: false)
   final bool isExternal;
 
+  /// Index of the EqPreset most recently used for this track. Stored as int
+  /// (rather than the enum directly) to avoid forcing a Hive type adapter on
+  /// the enum and to remain robust to enum reordering -- see EqPreset doc.
+  @HiveField(11)
+  int? focusPresetIndex;
+
   Track({
     required this.id,
     required this.name,
@@ -50,6 +56,7 @@ class Track extends HiveObject {
     this.bpm,
     this.musicalKey,
     this.isExternal = false,
+    this.focusPresetIndex,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -66,6 +73,8 @@ class Track extends HiveObject {
     int? bpm,
     String? musicalKey,
     bool? isExternal,
+    int? focusPresetIndex,
+    bool clearFocusPreset = false,
   }) {
     return Track(
       id: id ?? this.id,
@@ -79,6 +88,8 @@ class Track extends HiveObject {
       bpm: bpm ?? this.bpm,
       musicalKey: musicalKey ?? this.musicalKey,
       isExternal: isExternal ?? this.isExternal,
+      focusPresetIndex:
+          clearFocusPreset ? null : (focusPresetIndex ?? this.focusPresetIndex),
     );
   }
 

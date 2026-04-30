@@ -32,6 +32,21 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   PlayerNotifier() : super(const AppPlayerState()) {
     _initStreams();
+    _seedFocusFromSettings();
+  }
+
+  /// Seed the in-memory focus preset from persisted user default. Track-level
+  /// memory still wins inside loadTrack -- this only matters for the very
+  /// first track played in a session and for device-audio (which has no
+  /// per-track memory of its own).
+  Future<void> _seedFocusFromSettings() async {
+    await _storage.init();
+    final idx = _storage.getSetting<int>('defaultFocusModeIndex');
+    if (idx == null || idx < 0 || idx >= EqPreset.values.length) return;
+    final preset = EqPreset.values[idx];
+    if (preset != state.focusMode) {
+      state = state.copyWith(focusMode: preset);
+    }
   }
 
   void _initStreams() {
@@ -65,9 +80,29 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   /// Apply a Focus EQ preset. No-op effectively when device doesn't
   /// support effects, but state still updates so the UI reflects intent.
+  ///
+  /// Persists the choice on the current Track so the same preset is
+  /// re-applied next time the track plays. Device-audio (isExternal)
+  /// tracks are kept in memory only -- they aren't in the Hive box.
   Future<void> setFocusMode(EqPreset preset) async {
     await _effectsService.applyPreset(preset);
-    state = state.copyWith(focusMode: preset);
+
+    final track = state.currentTrack;
+    Track? updatedTrack;
+    if (track != null) {
+      updatedTrack = track.copyWith(
+        focusPresetIndex: preset.index,
+        clearFocusPreset: preset == EqPreset.flat,
+      );
+      if (!track.isExternal) {
+        await _storage.saveTrack(updatedTrack);
+      }
+    }
+
+    state = state.copyWith(
+      focusMode: preset,
+      currentTrack: updatedTrack ?? track,
+    );
   }
 
   /// Handle track completion based on play mode
@@ -145,6 +180,11 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         updatedTrack = track;
       }
 
+      // Resolve which Focus preset to apply: track-specific memory wins,
+      // otherwise fall back to whatever's currently active (which itself
+      // was seeded from defaults at app start).
+      final resolvedFocus = _resolveFocusForTrack(updatedTrack);
+
       state = state.copyWith(
         currentTrack: updatedTrack,
         duration: duration ?? Duration.zero,
@@ -152,7 +192,11 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         markers: markers,
         isLoading: false,
         clearAbLoop: true,
+        focusMode: resolvedFocus,
       );
+
+      // Apply on the audio session (no-op if effects unsupported).
+      await _effectsService.applyPreset(resolvedFocus);
 
       // Start analysis immediately (before play) if BPM/Key not set
       if (updatedTrack.bpm == null || updatedTrack.musicalKey == null) {
@@ -167,6 +211,13 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         error: 'Failed to load track: $e',
       );
     }
+  }
+
+  EqPreset _resolveFocusForTrack(Track track) {
+    final idx = track.focusPresetIndex;
+    if (idx == null) return state.focusMode;
+    if (idx < 0 || idx >= EqPreset.values.length) return EqPreset.flat;
+    return EqPreset.values[idx];
   }
 
   /// Load and play audio directly from file path (for device audio)
@@ -210,6 +261,10 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       // Load file
       final duration = await _audioService.loadFile(filePath);
       final markers = _storage.getMarkersForTrack(tempTrack.id);
+
+      // Device-audio tracks aren't persisted, so they don't carry their
+      // own focus memory -- inherit whatever the player currently has.
+      await _effectsService.applyPreset(state.focusMode);
 
       state = state.copyWith(
         currentTrack: tempTrack.copyWith(

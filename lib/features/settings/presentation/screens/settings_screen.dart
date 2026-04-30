@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../providers/settings_provider.dart';
@@ -67,6 +68,66 @@ class SettingsScreen extends ConsumerWidget {
                       .read(settingsProvider.notifier)
                       .setDefaultPitchSemitones(value.round());
                 },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Default Focus
+          _buildSectionHeader('Default Focus'),
+          _buildCard(
+            children: [
+              _buildSettingRow(
+                'Focus Preset',
+                settings.defaultFocusMode == EqPreset.flat
+                    ? 'Off'
+                    : settings.defaultFocusMode.label,
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: EqPreset.values.map((preset) {
+                    final isSelected = preset == settings.defaultFocusMode;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => ref
+                            .read(settingsProvider.notifier)
+                            .setDefaultFocusMode(preset),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primaryStart
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primaryStart
+                                  : AppColors.border,
+                            ),
+                          ),
+                          child: Text(
+                            preset.label,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
             ],
           ),
