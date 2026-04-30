@@ -39,8 +39,7 @@ class MetronomeControl extends ConsumerWidget {
               ),
               Switch(
                 value: state.enabled,
-                onChanged:
-                    state.isAligned ? (_) => notifier.toggle() : null,
+                onChanged: (_) => notifier.toggle(),
                 activeColor: AppColors.primaryStart,
               ),
             ],

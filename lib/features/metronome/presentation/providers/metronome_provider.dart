@@ -56,7 +56,7 @@ class MetronomeState {
     this.timeSignature = TimeSignature.fourFour,
     this.currentBeatIndex = 0,
     this.tapHistoryMs = const [],
-    this.volume = 0.7,
+    this.volume = 1.0,
     this.bpmIsUserSet = false,
   });
 
@@ -122,11 +122,6 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
   Ticker? _ticker;
   int _lastClickedBeatNumber = -1;
 
-  /// Window inside which we accept "we just crossed this beat" before
-  /// declaring it missed. Player position polls in chunks so we can't be
-  /// surgical, but 80ms is tight enough that double-clicks won't happen.
-  static const int _beatTriggerWindowMs = 80;
-
   /// How long to wait between taps before discarding history. A user
   /// hesitating longer than 2 seconds was probably distracted -- start over.
   static const int _tapResetMs = 2000;
@@ -145,7 +140,13 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
 
   Future<void> enable() async {
     if (state.enabled) return;
-    state = state.copyWith(enabled: true);
+    // Allow turning the metronome on without an explicit tap-to-sync.
+    // We default the phase anchor to 0 so clicks start from the track's
+    // beginning at the current bpm. Users who want to lock to the song
+    // can refine later with the Tap button.
+    final phase = state.phaseOffsetMs >= 0 ? state.phaseOffsetMs : 0;
+    state = state.copyWith(enabled: true, phaseOffsetMs: phase);
+    _lastClickedBeatNumber = -1;
     _startTicker();
   }
 
@@ -193,7 +194,15 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
       currentBeatIndex: 0,
       bpmIsUserSet: true,
     );
-    _lastClickedBeatNumber = -1;
+
+    // The user already heard the audio they tapped on, so don't fire a
+    // click for the beat slot containing the most recent tap. Mark it
+    // as "already clicked" -- the next tick will pick up from the next
+    // boundary forward.
+    final intervalMs = 60000.0 / newBpm;
+    final relLast = (history.last - history.first).toDouble();
+    _lastClickedBeatNumber = (relLast / intervalMs).floor();
+
     _persistOnTrack();
   }
 
@@ -273,14 +282,15 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     final positionMs = player.position.inMilliseconds;
     final intervalMs = state.beatIntervalMs;
     final relMs = positionMs - state.phaseOffsetMs;
-    if (relMs < -intervalMs) return; // before alignment
+    if (relMs < 0) return; // before phase anchor -- nothing to click yet
 
     final beatNumber = (relMs / intervalMs).floor();
-    if (beatNumber == _lastClickedBeatNumber) return;
-
-    final beatTimeMs = state.phaseOffsetMs + beatNumber * intervalMs;
-    final lateBy = positionMs - beatTimeMs;
-    if (lateBy < 0 || lateBy > _beatTriggerWindowMs) return;
+    // Only fire when we've crossed into a new beat slot. The player's
+    // position stream doesn't tick continuously (often 100-200 ms), so
+    // a strict "fire only within X ms of the boundary" check would drop
+    // beats. Always firing on advance keeps the cadence intact even if
+    // the click lands a few ms late.
+    if (beatNumber <= _lastClickedBeatNumber) return;
 
     _lastClickedBeatNumber = beatNumber;
     final beatInBar = beatNumber.abs() % state.beatsPerBar;
