@@ -71,9 +71,19 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         _onTrackComplete();
       }
       // Effects capability becomes known after the first audio session id
-      // arrives -- piggy-back on player state updates to surface it.
+      // arrives -- piggy-back on player state updates to surface it. When
+      // it transitions to available, also seed band levels from the
+      // currently-selected preset so the visualiser has data to render.
       if (_effectsService.isAvailable != state.focusAvailable) {
-        state = state.copyWith(focusAvailable: _effectsService.isAvailable);
+        final levels = _effectsService.presetBandLevels(state.focusMode);
+        final bass = _effectsService.presetBassStrength(state.focusMode);
+        state = state.copyWith(
+          focusAvailable: _effectsService.isAvailable,
+          bandLevelsMillibel: levels != null
+              ? _normaliseToDeviceBands(levels)
+              : state.bandLevelsMillibel,
+          bassStrengthMilli: bass,
+        );
       }
     });
   }
@@ -90,19 +100,101 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
     final track = state.currentTrack;
     Track? updatedTrack;
     if (track != null) {
+      // Switching back to a canned preset wipes any custom band memory
+      // for this track so the next load resolves cleanly.
       updatedTrack = track.copyWith(
         focusPresetIndex: preset.index,
         clearFocusPreset: preset == EqPreset.flat,
+        clearCustomEq: preset.isCanned,
       );
       if (!track.isExternal) {
         await _storage.saveTrack(updatedTrack);
       }
     }
 
+    // Seed the visualiser's band levels from the preset table so the
+    // sliders snap to the new shape. Custom presets don't have a table --
+    // leave the existing levels in place.
+    final newLevels = _effectsService.presetBandLevels(preset) != null
+        ? _normaliseToDeviceBands(_effectsService.presetBandLevels(preset)!)
+        : state.bandLevelsMillibel;
+    final newBass = preset.isCanned
+        ? _effectsService.presetBassStrength(preset)
+        : state.bassStrengthMilli;
+
     state = state.copyWith(
       focusMode: preset,
       currentTrack: updatedTrack ?? track,
+      bandLevelsMillibel: _normaliseToDeviceBands(newLevels),
+      bassStrengthMilli: newBass,
     );
+  }
+
+  /// Apply a manual band-level edit. Flips focus mode to custom.
+  Future<void> setBandLevel(int bandIndex, int millibel) async {
+    if (!_effectsService.isAvailable) return;
+    final levels = List<int>.from(state.bandLevelsMillibel);
+    if (bandIndex < 0 || bandIndex >= levels.length) return;
+    levels[bandIndex] = millibel;
+
+    await _effectsService.applyCustom(
+      bandLevelsMillibel: levels,
+      bassStrengthMilli: state.bassStrengthMilli,
+    );
+    state = state.copyWith(
+      focusMode: EqPreset.custom,
+      bandLevelsMillibel: levels,
+    );
+    await _persistCustomEqIfNeeded();
+  }
+
+  /// Apply a manual bass-boost edit. Also flips to custom.
+  Future<void> setBassStrength(int milli) async {
+    if (!_effectsService.isAvailable) return;
+    final clamped = milli.clamp(0, 1000);
+    await _effectsService.applyCustom(
+      bandLevelsMillibel: state.bandLevelsMillibel,
+      bassStrengthMilli: clamped,
+    );
+    state = state.copyWith(
+      focusMode: EqPreset.custom,
+      bassStrengthMilli: clamped,
+    );
+    await _persistCustomEqIfNeeded();
+  }
+
+  /// Resize the band-level list to match the device's actual band count
+  /// (capabilities reported by the platform). Linearly interpolates if
+  /// our 5-element preset table doesn't line up with the device.
+  List<int> _normaliseToDeviceBands(List<int> source) {
+    final caps = _effectsService.capabilities;
+    final target = caps.numberOfBands;
+    if (target <= 0 || source.isEmpty) return source;
+    if (source.length == target) return source;
+
+    final out = List<int>.filled(target, 0);
+    final srcLast = source.length - 1;
+    final tgtLast = target - 1;
+    for (int i = 0; i < target; i++) {
+      final pos = tgtLast == 0 ? 0.0 : i * srcLast / tgtLast;
+      final lo = pos.toInt().clamp(0, srcLast);
+      final hi = (lo + 1).clamp(0, srcLast);
+      final frac = pos - lo;
+      out[i] = (source[lo] * (1 - frac) + source[hi] * frac).round();
+    }
+    return out;
+  }
+
+  Future<void> _persistCustomEqIfNeeded() async {
+    final track = state.currentTrack;
+    if (track == null || track.isExternal) return;
+    final updated = track.copyWith(
+      focusPresetIndex: EqPreset.custom.index,
+      customBandLevels: List<int>.from(state.bandLevelsMillibel),
+      customBassStrength: state.bassStrengthMilli,
+    );
+    await _storage.saveTrack(updated);
+    state = state.copyWith(currentTrack: updated);
   }
 
   /// Handle track completion based on play mode
@@ -184,6 +276,8 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       // otherwise fall back to whatever's currently active (which itself
       // was seeded from defaults at app start).
       final resolvedFocus = _resolveFocusForTrack(updatedTrack);
+      final resolvedLevels = _resolveBandLevels(updatedTrack, resolvedFocus);
+      final resolvedBass = _resolveBassStrength(updatedTrack, resolvedFocus);
 
       state = state.copyWith(
         currentTrack: updatedTrack,
@@ -193,10 +287,19 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         isLoading: false,
         clearAbLoop: true,
         focusMode: resolvedFocus,
+        bandLevelsMillibel: resolvedLevels,
+        bassStrengthMilli: resolvedBass,
       );
 
       // Apply on the audio session (no-op if effects unsupported).
-      await _effectsService.applyPreset(resolvedFocus);
+      if (resolvedFocus == EqPreset.custom) {
+        await _effectsService.applyCustom(
+          bandLevelsMillibel: resolvedLevels,
+          bassStrengthMilli: resolvedBass,
+        );
+      } else {
+        await _effectsService.applyPreset(resolvedFocus);
+      }
 
       // Start analysis immediately (before play) if BPM/Key not set
       if (updatedTrack.bpm == null || updatedTrack.musicalKey == null) {
@@ -218,6 +321,29 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
     if (idx == null) return state.focusMode;
     if (idx < 0 || idx >= EqPreset.values.length) return EqPreset.flat;
     return EqPreset.values[idx];
+  }
+
+  /// Pick which band levels to seed in state for this (track, preset).
+  /// Custom prefers the track's stored levels; canned presets pull from
+  /// the preset table; falls back to current state when neither applies.
+  List<int> _resolveBandLevels(Track track, EqPreset preset) {
+    if (preset == EqPreset.custom) {
+      final stored = track.customBandLevels;
+      if (stored != null && stored.isNotEmpty) {
+        return _normaliseToDeviceBands(List<int>.from(stored));
+      }
+      return _normaliseToDeviceBands(state.bandLevelsMillibel);
+    }
+    final canned = _effectsService.presetBandLevels(preset);
+    if (canned != null) return _normaliseToDeviceBands(canned);
+    return state.bandLevelsMillibel;
+  }
+
+  int _resolveBassStrength(Track track, EqPreset preset) {
+    if (preset == EqPreset.custom) {
+      return track.customBassStrength ?? state.bassStrengthMilli;
+    }
+    return _effectsService.presetBassStrength(preset);
   }
 
   /// Load and play audio directly from file path (for device audio)

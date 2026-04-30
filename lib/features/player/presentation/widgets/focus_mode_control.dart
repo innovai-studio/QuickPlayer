@@ -1,21 +1,34 @@
 import 'package:flutter/material.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
+import 'eq_visualizer.dart';
 
-/// Single-tap chip row for picking a Focus EQ preset.
+/// Focus EQ card: a chip row of presets stacked above a frequency-response
+/// curve and a per-band slider strip. Manual slider drags flip the chip
+/// row to the `Custom` chip automatically.
 ///
-/// Hidden entirely when the device cannot run Equalizer effects, so the
-/// player screen doesn't show a control that does nothing.
+/// The whole card collapses on devices that report effects unsupported,
+/// so non-Android / older devices never see a dead control.
 class FocusModeControl extends StatelessWidget {
   final EqPreset preset;
   final bool available;
-  final ValueChanged<EqPreset> onChanged;
+  final AudioEffectsCapabilities capabilities;
+  final List<int> bandLevelsMillibel;
+  final int bassStrengthMilli;
+  final ValueChanged<EqPreset> onPresetChanged;
+  final void Function(int bandIndex, int millibel) onBandChanged;
+  final ValueChanged<int> onBassChanged;
 
   const FocusModeControl({
     super.key,
     required this.preset,
     required this.available,
-    required this.onChanged,
+    required this.capabilities,
+    required this.bandLevelsMillibel,
+    required this.bassStrengthMilli,
+    required this.onPresetChanged,
+    required this.onBandChanged,
+    required this.onBassChanged,
   });
 
   @override
@@ -65,11 +78,19 @@ class FocusModeControl extends StatelessWidget {
                   child: _PresetChip(
                     label: value.label,
                     selected: isSelected,
-                    onTap: () => onChanged(value),
+                    onTap: () => onPresetChanged(value),
                   ),
                 );
               }).toList(),
             ),
+          ),
+          const SizedBox(height: 16),
+          EqVisualizer(
+            capabilities: capabilities,
+            bandLevelsMillibel: bandLevelsMillibel,
+            bassStrengthMilli: bassStrengthMilli,
+            onBandChanged: onBandChanged,
+            onBassChanged: onBassChanged,
           ),
         ],
       ),

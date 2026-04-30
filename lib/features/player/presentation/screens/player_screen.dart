@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/extensions/duration_extension.dart';
 import '../../../library/data/models/track.dart';
@@ -174,9 +175,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       FocusModeControl(
                         preset: playerState.focusMode,
                         available: playerState.focusAvailable,
-                        onChanged: (preset) => ref
+                        capabilities: AudioEffectsService().capabilities,
+                        bandLevelsMillibel: playerState.bandLevelsMillibel,
+                        bassStrengthMilli: playerState.bassStrengthMilli,
+                        onPresetChanged: (preset) => ref
                             .read(playerProvider.notifier)
                             .setFocusMode(preset),
+                        onBandChanged: (i, mb) => ref
+                            .read(playerProvider.notifier)
+                            .setBandLevel(i, mb),
+                        onBassChanged: (m) => ref
+                            .read(playerProvider.notifier)
+                            .setBassStrength(m),
                       ),
                       if (playerState.focusAvailable)
                         const SizedBox(height: 16),

@@ -27,6 +27,8 @@ class AppPlayerState {
   // Focus EQ
   final EqPreset focusMode;
   final bool focusAvailable;
+  final List<int> bandLevelsMillibel;
+  final int bassStrengthMilli;
 
   const AppPlayerState({
     this.currentTrack,
@@ -47,6 +49,8 @@ class AppPlayerState {
     this.shuffleOrder,
     this.focusMode = EqPreset.flat,
     this.focusAvailable = false,
+    this.bandLevelsMillibel = const [],
+    this.bassStrengthMilli = 0,
   });
 
   /// Whether there's a next track in the queue
@@ -90,6 +94,8 @@ class AppPlayerState {
     List<int>? shuffleOrder,
     EqPreset? focusMode,
     bool? focusAvailable,
+    List<int>? bandLevelsMillibel,
+    int? bassStrengthMilli,
     bool clearTrack = false,
     bool clearAbLoop = false,
     bool clearError = false,
@@ -115,6 +121,8 @@ class AppPlayerState {
       shuffleOrder: clearShuffleOrder ? null : (shuffleOrder ?? this.shuffleOrder),
       focusMode: focusMode ?? this.focusMode,
       focusAvailable: focusAvailable ?? this.focusAvailable,
+      bandLevelsMillibel: bandLevelsMillibel ?? this.bandLevelsMillibel,
+      bassStrengthMilli: bassStrengthMilli ?? this.bassStrengthMilli,
     );
   }
 }

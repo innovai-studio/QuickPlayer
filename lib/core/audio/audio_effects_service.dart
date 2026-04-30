@@ -2,14 +2,19 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
 
-/// Five Focus presets exposed in the UI. Index is persisted, so the order
+/// Focus presets exposed in the UI. Index is persisted, so the order
 /// must remain stable -- append new values rather than reordering.
+///
+/// `custom` is a sentinel meaning "use whatever bandLevels are currently in
+/// the player state instead of the canned table". It surfaces in the chip
+/// row as soon as the user manually drags any band slider.
 enum EqPreset {
   flat,
   vocalBoost,
   guitarBoost,
   drumFocus,
   bassCut,
+  custom,
 }
 
 extension EqPresetX on EqPreset {
@@ -26,8 +31,13 @@ extension EqPresetX on EqPreset {
         return 'Drums';
       case EqPreset.bassCut:
         return 'Bass-';
+      case EqPreset.custom:
+        return 'Custom';
     }
   }
+
+  /// Whether this preset has a fixed band table. `custom` doesn't.
+  bool get isCanned => this != EqPreset.custom;
 }
 
 /// Capabilities reported by the platform after init.
@@ -117,9 +127,12 @@ class AudioEffectsService {
 
   /// Apply a preset. No-op when effects aren't available -- callers can
   /// still call this freely on iOS / Linux without checking platform.
+  ///
+  /// Custom is a no-op here -- callers should drive applyCustom directly.
   Future<void> applyPreset(EqPreset preset) async {
     _activePreset = preset;
     if (!isAvailable) return;
+    if (!preset.isCanned) return;
 
     final config = _presetConfig(preset);
     try {
@@ -131,6 +144,37 @@ class AudioEffectsService {
       // Swallow -- we'll surface a single capability flag instead of erroring
       // every call. The next attachToSession will re-detect support.
     }
+  }
+
+  /// Push raw band levels + bass strength to the platform without going
+  /// through a preset. Used when the user is dragging EQ sliders.
+  Future<void> applyCustom({
+    required List<int> bandLevelsMillibel,
+    required int bassStrengthMilli,
+  }) async {
+    _activePreset = EqPreset.custom;
+    if (!isAvailable) return;
+    try {
+      await _channel.invokeMethod<void>('applyPreset', {
+        'bandLevels': bandLevelsMillibel,
+        'bassStrength': bassStrengthMilli,
+      });
+    } on PlatformException {
+      // ignore; capability flag will catch persistent failures
+    }
+  }
+
+  /// Lookup the canned preset's band levels (5-band shape). Used by the
+  /// player state to seed the visualiser when a preset is selected.
+  /// Returns null for `custom` since it has no canonical table.
+  List<int>? presetBandLevels(EqPreset preset) {
+    if (!preset.isCanned) return null;
+    return List<int>.from(_presetConfig(preset).bandLevelsMillibel);
+  }
+
+  int presetBassStrength(EqPreset preset) {
+    if (!preset.isCanned) return 0;
+    return _presetConfig(preset).bassStrengthMilli;
   }
 
   /// Master toggle. Use sparingly -- applying EqPreset.flat already produces
@@ -175,6 +219,10 @@ class AudioEffectsService {
         return const _PresetConfig([400, 200, -200, 0, 300], 600);
       case EqPreset.bassCut:
         return const _PresetConfig([-800, -400, 0, 0, 0], 0);
+      case EqPreset.custom:
+        // Defensive: callers should never invoke the canned path for
+        // custom -- but if they do, treat it as flat.
+        return const _PresetConfig([0, 0, 0, 0, 0], 0);
     }
   }
 }

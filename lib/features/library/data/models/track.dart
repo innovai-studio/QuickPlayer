@@ -44,6 +44,15 @@ class Track extends HiveObject {
   @HiveField(11)
   int? focusPresetIndex;
 
+  /// Per-band millibel offsets when the user has manually tuned the EQ.
+  /// Only populated for the `custom` preset; null for canned presets.
+  @HiveField(12)
+  List<int>? customBandLevels;
+
+  /// Bass-boost strength (0..1000) when in custom mode. Null otherwise.
+  @HiveField(13)
+  int? customBassStrength;
+
   Track({
     required this.id,
     required this.name,
@@ -57,6 +66,8 @@ class Track extends HiveObject {
     this.musicalKey,
     this.isExternal = false,
     this.focusPresetIndex,
+    this.customBandLevels,
+    this.customBassStrength,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -74,7 +85,10 @@ class Track extends HiveObject {
     String? musicalKey,
     bool? isExternal,
     int? focusPresetIndex,
+    List<int>? customBandLevels,
+    int? customBassStrength,
     bool clearFocusPreset = false,
+    bool clearCustomEq = false,
   }) {
     return Track(
       id: id ?? this.id,
@@ -90,6 +104,12 @@ class Track extends HiveObject {
       isExternal: isExternal ?? this.isExternal,
       focusPresetIndex:
           clearFocusPreset ? null : (focusPresetIndex ?? this.focusPresetIndex),
+      customBandLevels: clearCustomEq
+          ? null
+          : (customBandLevels ?? this.customBandLevels),
+      customBassStrength: clearCustomEq
+          ? null
+          : (customBassStrength ?? this.customBassStrength),
     );
   }
 
