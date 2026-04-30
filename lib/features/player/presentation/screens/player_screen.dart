@@ -18,6 +18,7 @@ import '../widgets/ab_loop_control.dart';
 import '../widgets/focus_mode_control.dart';
 import '../widgets/marker_list.dart';
 import '../widgets/waveform_view.dart';
+import '../../../metronome/presentation/widgets/metronome_control.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String trackId;
@@ -204,6 +205,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                       if (playerState.focusAvailable)
                         const SizedBox(height: 16),
+
+                      // Metronome
+                      const MetronomeControl(),
+                      const SizedBox(height: 16),
 
                       // A-B Loop control
                       ABLoopControl(

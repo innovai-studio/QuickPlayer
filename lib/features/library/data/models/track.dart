@@ -53,6 +53,12 @@ class Track extends HiveObject {
   @HiveField(13)
   int? customBassStrength;
 
+  /// Player position (ms) of the user-tapped first beat. Null when the
+  /// user hasn't aligned the metronome for this track yet. Survives
+  /// across plays so re-opening the song doesn't lose the alignment.
+  @HiveField(14)
+  int? metronomePhaseOffsetMs;
+
   Track({
     required this.id,
     required this.name,
@@ -68,6 +74,7 @@ class Track extends HiveObject {
     this.focusPresetIndex,
     this.customBandLevels,
     this.customBassStrength,
+    this.metronomePhaseOffsetMs,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -87,8 +94,10 @@ class Track extends HiveObject {
     int? focusPresetIndex,
     List<int>? customBandLevels,
     int? customBassStrength,
+    int? metronomePhaseOffsetMs,
     bool clearFocusPreset = false,
     bool clearCustomEq = false,
+    bool clearMetronome = false,
   }) {
     return Track(
       id: id ?? this.id,
@@ -110,6 +119,9 @@ class Track extends HiveObject {
       customBassStrength: clearCustomEq
           ? null
           : (customBassStrength ?? this.customBassStrength),
+      metronomePhaseOffsetMs: clearMetronome
+          ? null
+          : (metronomePhaseOffsetMs ?? this.metronomePhaseOffsetMs),
     );
   }
 
