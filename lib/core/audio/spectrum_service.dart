@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
@@ -45,7 +44,6 @@ class SpectrumService {
   StreamSubscription<dynamic>? _eventSub;
   bool _running = false;
   int? _activeSessionId;
-  int _platformFrameCount = 0;
 
   Stream<SpectrumFrame> get frames => _frames.stream;
   bool get isRunning => _running;
@@ -72,19 +70,17 @@ class SpectrumService {
     if (_running && _activeSessionId == sessionId) return true;
 
     try {
-      developer.log('SpectrumService.start sessionId=$sessionId',
-          name: 'QPSpectrum');
-      final caps = await _control.invokeMethod<Map<dynamic, dynamic>>(
+      await _control.invokeMethod<Map<dynamic, dynamic>>(
         'start',
         {'sessionId': sessionId},
       );
-      developer.log('start returned caps=$caps', name: 'QPSpectrum');
       await _eventSub?.cancel();
-      _platformFrameCount = 0;
       _eventSub = _events.receiveBroadcastStream().listen(
         _onPlatformFrame,
-        onError: (e) {
-          developer.log('event stream error: $e', name: 'QPSpectrum');
+        onError: (_) {
+          // Visualizer can fire async errors if the audio session goes
+          // away (track switch, audio focus loss). Drop the stream and
+          // let the next start() rebind.
           _running = false;
         },
         cancelOnError: false,
@@ -92,8 +88,7 @@ class SpectrumService {
       _running = true;
       _activeSessionId = sessionId;
       return true;
-    } on PlatformException catch (e) {
-      developer.log('start failed: ${e.code} ${e.message}', name: 'QPSpectrum');
+    } on PlatformException {
       _running = false;
       return false;
     }
@@ -113,32 +108,13 @@ class SpectrumService {
   }
 
   void _onPlatformFrame(dynamic raw) {
-    if (raw is! Map) {
-      developer.log('frame not a Map: ${raw.runtimeType}', name: 'QPSpectrum');
-      return;
-    }
+    if (raw is! Map) return;
     final fft = raw['fft'];
     final samplingRate = (raw['samplingRate'] as int?) ?? 44100;
-    if (fft is! List<int> && fft is! Uint8List) {
-      developer.log('fft has unexpected type: ${fft.runtimeType}',
-          name: 'QPSpectrum');
-      return;
-    }
+    if (fft is! List<int> && fft is! Uint8List) return;
 
     final List<int> bytes = fft is Uint8List ? fft : List<int>.from(fft);
     if (bytes.length < 2) return;
-    if (_platformFrameCount < 3 || _platformFrameCount % 60 == 0) {
-      int maxAbs = 0;
-      for (int b in bytes) {
-        final s = b > 127 ? b - 256 : b;
-        final a = s.abs();
-        if (a > maxAbs) maxAbs = a;
-      }
-      developer.log(
-          'frame #$_platformFrameCount len=${bytes.length} maxAbs=$maxAbs sr=$samplingRate',
-          name: 'QPSpectrum');
-    }
-    _platformFrameCount++;
 
     // Visualizer FFT layout: [DC_real, Nyquist_real, R1, I1, R2, I2, ...]
     final int binCount = bytes.length ~/ 2;

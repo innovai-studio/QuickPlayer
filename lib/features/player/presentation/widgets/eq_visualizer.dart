@@ -118,11 +118,16 @@ class _EqVisualizerState extends State<EqVisualizer> {
                 // Backing rect
                 Container(color: AppColors.surfaceDark),
 
-                // Spectrum layer (only paints when frames arrive)
+                // Spectrum layer (only paints when frames arrive). We snapshot
+                // the bins per build so the painter's shouldRepaint can
+                // compare against the previous frame's values (in-place
+                // mutation would alias both old and new and skip repaints).
                 if (widget.spectrumEnabled)
                   RepaintBoundary(
                     child: CustomPaint(
-                      painter: _SpectrumPainter(bins: _smoothedBins),
+                      painter: _SpectrumPainter(
+                        bins: List<double>.from(_smoothedBins),
+                      ),
                       size: Size.infinite,
                     ),
                   ),
@@ -183,12 +188,20 @@ class _EqVisualizerState extends State<EqVisualizer> {
           ),
         ),
         const SizedBox(height: 4),
-        // Sliders
+        // Sliders. Bass+ sits leftmost so its position lines up with
+        // where it actually colours the spectrum (the low-frequency end).
         SizedBox(
           height: 140,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              if (widget.capabilities.hasBassBoost)
+                Expanded(
+                  child: _BassSlider(
+                    strengthMilli: widget.bassStrengthMilli,
+                    onChanged: widget.onBassChanged,
+                  ),
+                ),
               for (int i = 0; i < widget.bandLevelsMillibel.length; i++)
                 Expanded(
                   child: _BandSlider(
@@ -200,13 +213,6 @@ class _EqVisualizerState extends State<EqVisualizer> {
                         ? widget.capabilities.centerFrequenciesMilliHz[i]
                         : 0,
                     onChanged: (value) => widget.onBandChanged(i, value),
-                  ),
-                ),
-              if (widget.capabilities.hasBassBoost)
-                Expanded(
-                  child: _BassSlider(
-                    strengthMilli: widget.bassStrengthMilli,
-                    onChanged: widget.onBassChanged,
                   ),
                 ),
             ],

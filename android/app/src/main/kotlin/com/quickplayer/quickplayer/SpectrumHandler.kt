@@ -3,7 +3,6 @@ package com.quickplayer.quickplayer
 import android.media.audiofx.Visualizer
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -23,15 +22,10 @@ class SpectrumHandler :
     MethodChannel.MethodCallHandler,
     EventChannel.StreamHandler {
 
-    companion object {
-        private const val TAG = "QPSpectrum"
-    }
-
     private var visualizer: Visualizer? = null
     private var currentSessionId: Int = 0
     private var eventSink: EventChannel.EventSink? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var frameCount: Int = 0
 
     // ---- MethodChannel ---------------------------------------------------
 
@@ -61,7 +55,6 @@ class SpectrumHandler :
 
         try {
             releaseVisualizer()
-            Log.i(TAG, "Visualizer.start sessionId=$sessionId")
 
             val v = Visualizer(sessionId)
             // 1024 samples is the Visualizer default and gives 256 freq bins.
@@ -70,7 +63,6 @@ class SpectrumHandler :
             v.measurementMode = Visualizer.MEASUREMENT_MODE_NONE
 
             val rate = Visualizer.getMaxCaptureRate().coerceAtMost(20000)
-            Log.i(TAG, "captureSize=${v.captureSize} rate=$rate samplingRate=${v.samplingRate}")
             v.setDataCaptureListener(
                 object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(
@@ -87,20 +79,7 @@ class SpectrumHandler :
                         samplingRate: Int
                     ) {
                         if (fft == null) return
-                        val sink = eventSink ?: run {
-                            if (frameCount < 3) Log.w(TAG, "fft frame received but no eventSink")
-                            return
-                        }
-                        if (frameCount < 3 || frameCount % 60 == 0) {
-                            // Sample-log first few frames + every ~1 sec at 60Hz
-                            var maxAbs = 0
-                            for (b in fft) {
-                                val a = if (b < 0) -b.toInt() else b.toInt()
-                                if (a > maxAbs) maxAbs = a
-                            }
-                            Log.i(TAG, "fft #$frameCount len=${fft.size} maxAbs=$maxAbs samplingRate=$samplingRate")
-                        }
-                        frameCount++
+                        val sink = eventSink ?: return
                         // sink methods must be called on the platform thread,
                         // and Visualizer fires on its own thread.
                         mainHandler.post {
@@ -127,11 +106,8 @@ class SpectrumHandler :
 
             visualizer = v
             currentSessionId = sessionId
-            frameCount = 0
-            Log.i(TAG, "Visualizer enabled. capabilities=${buildCapabilities()}")
             result.success(buildCapabilities())
         } catch (e: RuntimeException) {
-            Log.e(TAG, "Visualizer construction failed", e)
             // Visualizer ctor throws RuntimeException on permission denied.
             releaseVisualizer()
             result.error(
@@ -148,12 +124,10 @@ class SpectrumHandler :
     // ---- EventChannel ----------------------------------------------------
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-        Log.i(TAG, "EventChannel onListen")
         eventSink = events
     }
 
     override fun onCancel(arguments: Any?) {
-        Log.i(TAG, "EventChannel onCancel")
         eventSink = null
     }
 

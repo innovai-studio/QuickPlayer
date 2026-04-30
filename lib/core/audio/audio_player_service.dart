@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
-import 'dart:developer' as developer;
 import 'audio_effects_service.dart';
 import 'spectrum_service.dart';
 
@@ -41,7 +40,6 @@ class AudioPlayerService {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     _sessionIdSubscription = _player.androidAudioSessionIdStream.listen((id) {
-      developer.log('androidAudioSessionId=$id', name: 'QPSpectrum');
       if (id == null) return;
       _lastSessionId = id;
       _effects.attachToSession(id);
@@ -54,9 +52,6 @@ class AudioPlayerService {
   /// the visualiser unavailable (permission denied or device unsupported).
   Future<bool> setSpectrumEnabled(bool enabled) async {
     _spectrumDesired = enabled;
-    developer.log(
-        'setSpectrumEnabled($enabled) lastSessionId=$_lastSessionId',
-        name: 'QPSpectrum');
     if (!enabled) {
       await _spectrum.stop();
       return false;
