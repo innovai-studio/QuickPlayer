@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
@@ -44,6 +45,7 @@ class SpectrumService {
   StreamSubscription<dynamic>? _eventSub;
   bool _running = false;
   int? _activeSessionId;
+  int _platformFrameCount = 0;
 
   Stream<SpectrumFrame> get frames => _frames.stream;
   bool get isRunning => _running;
@@ -70,17 +72,19 @@ class SpectrumService {
     if (_running && _activeSessionId == sessionId) return true;
 
     try {
-      await _control.invokeMethod<Map<dynamic, dynamic>>(
+      developer.log('SpectrumService.start sessionId=$sessionId',
+          name: 'QPSpectrum');
+      final caps = await _control.invokeMethod<Map<dynamic, dynamic>>(
         'start',
         {'sessionId': sessionId},
       );
+      developer.log('start returned caps=$caps', name: 'QPSpectrum');
       await _eventSub?.cancel();
+      _platformFrameCount = 0;
       _eventSub = _events.receiveBroadcastStream().listen(
         _onPlatformFrame,
-        onError: (_) {
-          // Visualizer can fire async errors if the audio session goes
-          // away (track switch, user kills audio focus). Drop the stream
-          // and let the next start() rebind.
+        onError: (e) {
+          developer.log('event stream error: $e', name: 'QPSpectrum');
           _running = false;
         },
         cancelOnError: false,
@@ -88,7 +92,8 @@ class SpectrumService {
       _running = true;
       _activeSessionId = sessionId;
       return true;
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      developer.log('start failed: ${e.code} ${e.message}', name: 'QPSpectrum');
       _running = false;
       return false;
     }
@@ -108,13 +113,32 @@ class SpectrumService {
   }
 
   void _onPlatformFrame(dynamic raw) {
-    if (raw is! Map) return;
+    if (raw is! Map) {
+      developer.log('frame not a Map: ${raw.runtimeType}', name: 'QPSpectrum');
+      return;
+    }
     final fft = raw['fft'];
     final samplingRate = (raw['samplingRate'] as int?) ?? 44100;
-    if (fft is! List<int> && fft is! Uint8List) return;
+    if (fft is! List<int> && fft is! Uint8List) {
+      developer.log('fft has unexpected type: ${fft.runtimeType}',
+          name: 'QPSpectrum');
+      return;
+    }
 
     final List<int> bytes = fft is Uint8List ? fft : List<int>.from(fft);
     if (bytes.length < 2) return;
+    if (_platformFrameCount < 3 || _platformFrameCount % 60 == 0) {
+      int maxAbs = 0;
+      for (int b in bytes) {
+        final s = b > 127 ? b - 256 : b;
+        final a = s.abs();
+        if (a > maxAbs) maxAbs = a;
+      }
+      developer.log(
+          'frame #$_platformFrameCount len=${bytes.length} maxAbs=$maxAbs sr=$samplingRate',
+          name: 'QPSpectrum');
+    }
+    _platformFrameCount++;
 
     // Visualizer FFT layout: [DC_real, Nyquist_real, R1, I1, R2, I2, ...]
     final int binCount = bytes.length ~/ 2;
@@ -162,15 +186,15 @@ class SpectrumService {
           mags[lo] * (1 - (freqIdx - lo)) + mags[hi] * (freqIdx - lo);
 
       // Convert magnitude to a 0..1 dB scale. Visualizer normalised mags
-      // sit in roughly 0..128, so 20*log10(mag/128) gives dB <= 0.
+      // sit in roughly 0..180 (sqrt(128^2 + 128^2)), so 20*log10(mag/180)
+      // gives dB <= 0. Map -60..0 dB to 0..1 with a soft floor.
       double db;
-      if (interp <= 0.5) {
-        db = -80;
+      if (interp <= 0.0) {
+        db = -60;
       } else {
-        db = 20 * (math.log(interp / 128.0) / math.ln10);
+        db = 20 * (math.log(interp / 180.0) / math.ln10);
       }
-      // Map -80..0 dB to 0..1 with a soft floor.
-      final double normalised = ((db + 80) / 80).clamp(0.0, 1.0);
+      final double normalised = ((db + 60) / 60).clamp(0.0, 1.0);
       out[i] = normalised;
     }
     return out;
