@@ -266,16 +266,23 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       // own focus memory -- inherit whatever the player currently has.
       await _effectsService.applyPreset(state.focusMode);
 
+      final loadedTrack = tempTrack.copyWith(
+        durationMs: duration?.inMilliseconds ?? durationMs ?? 0,
+      );
+
       state = state.copyWith(
-        currentTrack: tempTrack.copyWith(
-          durationMs: duration?.inMilliseconds ?? durationMs ?? 0,
-        ),
+        currentTrack: loadedTrack,
         duration: duration ?? Duration.zero,
         position: Duration.zero,
         markers: markers,
         isLoading: false,
         clearAbLoop: true,
       );
+
+      // Device audio doesn't carry persisted BPM/Key, so always kick off
+      // analysis. Result lives in memory only (skipped in _analyzeTrack
+      // for isExternal tracks) so the UI updates without polluting Hive.
+      _analyzeTrack(loadedTrack);
 
       await _audioService.play();
     } catch (e) {
@@ -576,7 +583,11 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
           musicalKey: result.key ?? track.musicalKey,
         );
 
-        await _storage.saveTrack(updatedTrack);
+        // External (device-audio) tracks aren't in the Hive box, so skip
+        // persistence and just update the in-memory player state.
+        if (!track.isExternal) {
+          await _storage.saveTrack(updatedTrack);
+        }
         state = state.copyWith(
           currentTrack: updatedTrack,
           isAnalyzing: false,
