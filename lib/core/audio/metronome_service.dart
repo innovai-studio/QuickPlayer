@@ -14,15 +14,27 @@ class MetronomeService {
   final AudioPlayer _highClick = AudioPlayer();
   final AudioPlayer _lowClick = AudioPlayer();
   bool _initialised = false;
+  double _volume = 1.0;
+
+  double get volume => _volume;
 
   Future<void> _ensureLoaded() async {
     if (_initialised) return;
     await _highClick.setAsset('assets/sounds/click_high.wav');
     await _lowClick.setAsset('assets/sounds/click_low.wav');
+    await _highClick.setVolume(_volume);
+    await _lowClick.setVolume(_volume);
     // Pre-roll: seek to start so first play() is fast.
     await _highClick.seek(Duration.zero);
     await _lowClick.seek(Duration.zero);
     _initialised = true;
+  }
+
+  Future<void> setVolume(double value) async {
+    _volume = value.clamp(0.0, 1.0);
+    if (!_initialised) return;
+    await _highClick.setVolume(_volume);
+    await _lowClick.setVolume(_volume);
   }
 
   /// Trigger one click. `isDownbeat` selects the higher-pitched sample.
