@@ -122,6 +122,23 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
   Ticker? _ticker;
   int _lastClickedBeatNumber = -1;
 
+  /// Beat number that should be flagged as the downbeat. Default 0 (start
+  /// of track). After tap-to-sync we move it forward so the first click
+  /// after the user's last tap fires as the downbeat -- aligns with the
+  /// "tap a full bar then expect 滴" cadence learners use.
+  int _downbeatAnchor = 0;
+
+  /// Wall-clock anchor for smooth click scheduling. Player position only
+  /// updates in 100-200 ms chunks, which is too coarse for jitter-free
+  /// click cadence. We capture (wallNowMs, playerPosMs) the moment the
+  /// metronome enables / re-syncs, then derive each tick's effective
+  /// position by interpolating wall-clock forward. We periodically check
+  /// the result against the actual player position to catch pauses,
+  /// seeks, and A-B-loop jumps; large deviations trigger a re-anchor.
+  int? _anchorWallMs;
+  int? _anchorPosMs;
+  static const int _resyncThresholdMs = 250;
+
   /// How long to wait between taps before discarding history. A user
   /// hesitating longer than 2 seconds was probably distracted -- start over.
   static const int _tapResetMs = 2000;
@@ -147,13 +164,20 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     final phase = state.phaseOffsetMs >= 0 ? state.phaseOffsetMs : 0;
     state = state.copyWith(enabled: true, phaseOffsetMs: phase);
     _lastClickedBeatNumber = -1;
+    _resetAnchor();
     _startTicker();
   }
 
   Future<void> disable() async {
     if (!state.enabled) return;
     _stopTicker();
+    _resetAnchor();
     state = state.copyWith(enabled: false);
+  }
+
+  void _resetAnchor() {
+    _anchorWallMs = null;
+    _anchorPosMs = null;
   }
 
   // ---- tap-to-sync ----------------------------------------------------
@@ -201,7 +225,17 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     // boundary forward.
     final intervalMs = 60000.0 / newBpm;
     final relLast = (history.last - history.first).toDouble();
-    _lastClickedBeatNumber = (relLast / intervalMs).floor();
+    final lastBeat = (relLast / intervalMs).floor();
+    _lastClickedBeatNumber = lastBeat;
+
+    // Treat the next beat after the user's final tap as the downbeat. If
+    // the user counted "1, 2, 3, 4" while tapping, the next click should
+    // be "1" of the new bar -- the high "滴" tick learners listen for.
+    _downbeatAnchor = lastBeat + 1;
+
+    // Re-anchor wall-clock so the next click fires on cadence with the
+    // tap, not a lagging position-stream value.
+    _resetAnchor();
 
     _persistOnTrack();
   }
@@ -254,6 +288,8 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
       // freely seed BPM until the user taps to override.
     );
     _lastClickedBeatNumber = -1;
+    _downbeatAnchor = 0;
+    _resetAnchor();
     if (wasEnabled && state.phaseOffsetMs >= 0) {
       // Restore "on" only if we have an alignment to use.
       enable();
@@ -277,23 +313,49 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     if (state.phaseOffsetMs < 0 || state.bpm <= 0) return;
 
     final player = _ref.read(playerProvider);
-    if (!player.isPlaying) return;
+    if (!player.isPlaying) {
+      // Pause: drop the wall-clock anchor so the next play() re-locks
+      // against the resumed position cleanly.
+      _resetAnchor();
+      return;
+    }
 
-    final positionMs = player.position.inMilliseconds;
+    final actualPosMs = player.position.inMilliseconds;
+    final wallNowMs = DateTime.now().millisecondsSinceEpoch;
+
+    // (Re)anchor wall-clock against the current player position when we
+    // either don't have an anchor yet or the actual position has drifted
+    // far from the prediction (seek, A-B loop wrap, big lag).
+    int effectivePosMs;
+    if (_anchorWallMs == null || _anchorPosMs == null) {
+      _anchorWallMs = wallNowMs;
+      _anchorPosMs = actualPosMs;
+      effectivePosMs = actualPosMs;
+    } else {
+      final predictedPos = _anchorPosMs! + (wallNowMs - _anchorWallMs!);
+      if ((predictedPos - actualPosMs).abs() > _resyncThresholdMs) {
+        _anchorWallMs = wallNowMs;
+        _anchorPosMs = actualPosMs;
+        effectivePosMs = actualPosMs;
+      } else {
+        effectivePosMs = predictedPos;
+      }
+    }
+
     final intervalMs = state.beatIntervalMs;
-    final relMs = positionMs - state.phaseOffsetMs;
-    if (relMs < 0) return; // before phase anchor -- nothing to click yet
+    final relMs = effectivePosMs - state.phaseOffsetMs;
+    if (relMs < 0) return;
 
     final beatNumber = (relMs / intervalMs).floor();
-    // Only fire when we've crossed into a new beat slot. The player's
-    // position stream doesn't tick continuously (often 100-200 ms), so
-    // a strict "fire only within X ms of the boundary" check would drop
-    // beats. Always firing on advance keeps the cadence intact even if
-    // the click lands a few ms late.
     if (beatNumber <= _lastClickedBeatNumber) return;
 
     _lastClickedBeatNumber = beatNumber;
-    final beatInBar = beatNumber.abs() % state.beatsPerBar;
+    // beatInBar is computed relative to the downbeat anchor so the user's
+    // last tap counts as the previous bar's last beat and the next click
+    // is "1".
+    final relBeat = beatNumber - _downbeatAnchor;
+    final beatInBar =
+        ((relBeat % state.beatsPerBar) + state.beatsPerBar) % state.beatsPerBar;
     final isDownbeat = beatInBar == 0;
     state = state.copyWith(currentBeatIndex: beatInBar);
     // ignore: discarded_futures
