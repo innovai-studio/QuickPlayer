@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/audio/audio_effects_service.dart';
@@ -41,11 +42,43 @@ class _EqVisualizerState extends State<EqVisualizer> {
   /// Updated on every incoming frame with attack/release envelope so the
   /// painted bars don't flicker.
   late List<double> _smoothedBins;
+  StreamSubscription<SpectrumFrame>? _spectrumSub;
 
   @override
   void initState() {
     super.initState();
     _smoothedBins = List<double>.filled(SpectrumService.outputBinCount, 0);
+    if (widget.spectrumEnabled) _subscribeSpectrum();
+  }
+
+  @override
+  void didUpdateWidget(EqVisualizer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.spectrumEnabled != oldWidget.spectrumEnabled) {
+      if (widget.spectrumEnabled) {
+        _subscribeSpectrum();
+      } else {
+        _unsubscribeSpectrum();
+        _smoothedBins =
+            List<double>.filled(SpectrumService.outputBinCount, 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _unsubscribeSpectrum();
+    super.dispose();
+  }
+
+  void _subscribeSpectrum() {
+    _spectrumSub?.cancel();
+    _spectrumSub = SpectrumService().frames.listen(_onFrame);
+  }
+
+  void _unsubscribeSpectrum() {
+    _spectrumSub?.cancel();
+    _spectrumSub = null;
   }
 
   void _onFrame(SpectrumFrame frame) {
@@ -57,6 +90,8 @@ class _EqVisualizerState extends State<EqVisualizer> {
       final coef = target > current ? 0.6 : 0.15;
       _smoothedBins[i] = current + (target - current) * coef;
     }
+    // Listener is called on stream events, never inside build, so this
+    // setState is safe.
     if (mounted) setState(() {});
   }
 
@@ -85,18 +120,11 @@ class _EqVisualizerState extends State<EqVisualizer> {
 
                 // Spectrum layer (only paints when frames arrive)
                 if (widget.spectrumEnabled)
-                  StreamBuilder<SpectrumFrame>(
-                    stream: SpectrumService().frames,
-                    builder: (context, snapshot) {
-                      final frame = snapshot.data;
-                      if (frame != null) _onFrame(frame);
-                      return RepaintBoundary(
-                        child: CustomPaint(
-                          painter: _SpectrumPainter(bins: _smoothedBins),
-                          size: Size.infinite,
-                        ),
-                      );
-                    },
+                  RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _SpectrumPainter(bins: _smoothedBins),
+                      size: Size.infinite,
+                    ),
                   ),
 
                 // EQ response curve on top
