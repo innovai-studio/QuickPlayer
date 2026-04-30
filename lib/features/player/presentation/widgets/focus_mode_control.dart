@@ -15,9 +15,11 @@ class FocusModeControl extends StatelessWidget {
   final AudioEffectsCapabilities capabilities;
   final List<int> bandLevelsMillibel;
   final int bassStrengthMilli;
+  final bool spectrumEnabled;
   final ValueChanged<EqPreset> onPresetChanged;
   final void Function(int bandIndex, int millibel) onBandChanged;
   final ValueChanged<int> onBassChanged;
+  final ValueChanged<bool> onSpectrumToggle;
 
   const FocusModeControl({
     super.key,
@@ -26,9 +28,11 @@ class FocusModeControl extends StatelessWidget {
     required this.capabilities,
     required this.bandLevelsMillibel,
     required this.bassStrengthMilli,
+    required this.spectrumEnabled,
     required this.onPresetChanged,
     required this.onBandChanged,
     required this.onBassChanged,
+    required this.onSpectrumToggle,
   });
 
   @override
@@ -55,15 +59,30 @@ class FocusModeControl extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              Text(
-                preset == EqPreset.flat ? 'Off' : preset.label,
-                style: TextStyle(
-                  color: preset == EqPreset.flat
-                      ? AppColors.textSecondary
-                      : AppColors.primaryStart,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  Text(
+                    preset == EqPreset.flat ? 'Off' : preset.label,
+                    style: TextStyle(
+                      color: preset == EqPreset.flat
+                          ? AppColors.textSecondary
+                          : AppColors.primaryStart,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: () => onSpectrumToggle(!spectrumEnabled),
+                    child: Icon(
+                      Icons.graphic_eq,
+                      size: 18,
+                      color: spectrumEnabled
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -89,8 +108,10 @@ class FocusModeControl extends StatelessWidget {
             capabilities: capabilities,
             bandLevelsMillibel: bandLevelsMillibel,
             bassStrengthMilli: bassStrengthMilli,
+            spectrumEnabled: spectrumEnabled,
             onBandChanged: onBandChanged,
             onBassChanged: onBassChanged,
+            onEnableSpectrum: () => onSpectrumToggle(true),
           ),
         ],
       ),

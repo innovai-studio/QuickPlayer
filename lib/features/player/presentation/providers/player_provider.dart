@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/audio/audio_player_service.dart';
 import '../../../../core/audio/audio_analyzer_service.dart';
+import '../../../../core/audio/spectrum_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../library/data/models/track.dart';
 import '../../data/models/ab_loop.dart';
@@ -22,6 +23,7 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
   final AudioPlayerService _audioService = AudioPlayerService();
   final AudioAnalyzerService _analyzerService = AudioAnalyzerService();
   final AudioEffectsService _effectsService = AudioEffectsService();
+  final SpectrumService _spectrumService = SpectrumService();
   final StorageService _storage = StorageService();
   final _uuid = const Uuid();
   final _random = math.Random();
@@ -128,6 +130,26 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       bandLevelsMillibel: _normaliseToDeviceBands(newLevels),
       bassStrengthMilli: newBass,
     );
+  }
+
+  /// Turn the real-time spectrum analyser on or off. When turning on we
+  /// request the RECORD_AUDIO permission first; if it's denied the state
+  /// stays disabled. The boolean returned describes whether spectrum is
+  /// actively running afterwards.
+  Future<bool> setSpectrumEnabled(bool enable) async {
+    if (!enable) {
+      await _audioService.setSpectrumEnabled(false);
+      state = state.copyWith(spectrumEnabled: false);
+      return false;
+    }
+    final perm = await _spectrumService.ensurePermission();
+    if (perm != SpectrumPermission.granted) {
+      state = state.copyWith(spectrumEnabled: false);
+      return false;
+    }
+    final ok = await _audioService.setSpectrumEnabled(true);
+    state = state.copyWith(spectrumEnabled: ok);
+    return ok;
   }
 
   /// Apply a manual band-level edit. Flips focus mode to custom.
@@ -681,6 +703,7 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   /// Stop playback and clear current track
   Future<void> stopAndClear() async {
+    await _audioService.setSpectrumEnabled(false);
     await _audioService.stop();
     state = const AppPlayerState();
   }

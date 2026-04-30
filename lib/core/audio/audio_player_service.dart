@@ -3,11 +3,21 @@ import 'dart:math';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'audio_effects_service.dart';
+import 'spectrum_service.dart';
 
 class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
   final AudioEffectsService _effects = AudioEffectsService();
+  final SpectrumService _spectrum = SpectrumService();
   StreamSubscription<int?>? _sessionIdSubscription;
+  int? _lastSessionId;
+  bool _spectrumDesired = false;
+
+  /// Stream of audio session ids forwarded from just_audio so callers
+  /// (PlayerNotifier) can react when a new session is bound.
+  Stream<int?> get sessionIdStream => _player.androidAudioSessionIdStream;
+  int? get lastSessionId => _lastSessionId;
+  bool get spectrumRunning => _spectrum.isRunning;
 
   // Streams
   Stream<Duration> get positionStream => _player.positionStream;
@@ -30,8 +40,28 @@ class AudioPlayerService {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     _sessionIdSubscription = _player.androidAudioSessionIdStream.listen((id) {
-      if (id != null) _effects.attachToSession(id);
+      if (id == null) return;
+      _lastSessionId = id;
+      _effects.attachToSession(id);
+      // If the user has opted into spectrum, rebind it to the new session.
+      if (_spectrumDesired) _spectrum.start(id);
     });
+  }
+
+  /// Toggle spectrum capture. Returns false when the platform reports
+  /// the visualiser unavailable (permission denied or device unsupported).
+  Future<bool> setSpectrumEnabled(bool enabled) async {
+    _spectrumDesired = enabled;
+    if (!enabled) {
+      await _spectrum.stop();
+      return false;
+    }
+    final id = _lastSessionId;
+    if (id == null) {
+      // No session yet -- the listener above will start it once one arrives.
+      return true;
+    }
+    return _spectrum.start(id);
   }
 
   /// Load audio from file path
@@ -103,6 +133,7 @@ class AudioPlayerService {
   /// Dispose
   Future<void> dispose() async {
     await _sessionIdSubscription?.cancel();
+    await _spectrum.stop();
     await _effects.release();
     await _player.dispose();
   }

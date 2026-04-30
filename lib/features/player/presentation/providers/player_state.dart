@@ -29,6 +29,7 @@ class AppPlayerState {
   final bool focusAvailable;
   final List<int> bandLevelsMillibel;
   final int bassStrengthMilli;
+  final bool spectrumEnabled;
 
   const AppPlayerState({
     this.currentTrack,
@@ -51,6 +52,7 @@ class AppPlayerState {
     this.focusAvailable = false,
     this.bandLevelsMillibel = const [],
     this.bassStrengthMilli = 0,
+    this.spectrumEnabled = false,
   });
 
   /// Whether there's a next track in the queue
@@ -96,6 +98,7 @@ class AppPlayerState {
     bool? focusAvailable,
     List<int>? bandLevelsMillibel,
     int? bassStrengthMilli,
+    bool? spectrumEnabled,
     bool clearTrack = false,
     bool clearAbLoop = false,
     bool clearError = false,
@@ -123,6 +126,7 @@ class AppPlayerState {
       focusAvailable: focusAvailable ?? this.focusAvailable,
       bandLevelsMillibel: bandLevelsMillibel ?? this.bandLevelsMillibel,
       bassStrengthMilli: bassStrengthMilli ?? this.bassStrengthMilli,
+      spectrumEnabled: spectrumEnabled ?? this.spectrumEnabled,
     );
   }
 }

@@ -178,6 +178,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         capabilities: AudioEffectsService().capabilities,
                         bandLevelsMillibel: playerState.bandLevelsMillibel,
                         bassStrengthMilli: playerState.bassStrengthMilli,
+                        spectrumEnabled: playerState.spectrumEnabled,
                         onPresetChanged: (preset) => ref
                             .read(playerProvider.notifier)
                             .setFocusMode(preset),
@@ -187,6 +188,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         onBassChanged: (m) => ref
                             .read(playerProvider.notifier)
                             .setBassStrength(m),
+                        onSpectrumToggle: (enable) async {
+                          final ok = await ref
+                              .read(playerProvider.notifier)
+                              .setSpectrumEnabled(enable);
+                          if (enable && !ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Microphone permission required for live spectrum'),
+                              ),
+                            );
+                          }
+                        },
                       ),
                       if (playerState.focusAvailable)
                         const SizedBox(height: 16),
