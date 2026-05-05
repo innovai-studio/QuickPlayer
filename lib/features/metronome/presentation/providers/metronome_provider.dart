@@ -182,9 +182,23 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
 
   // ---- tap-to-sync ----------------------------------------------------
 
-  /// Register a single tap. Two or more taps within _tapResetMs derive a
-  /// new BPM + phase offset; the first tap of a fresh series sets the
-  /// phase anchor against the current player position.
+  /// Register a single tap.
+  ///
+  /// Each tap is treated as a beat boundary. The phase anchor is set to
+  /// the *most recent* tap rather than the first, so as the user keeps
+  /// tapping the prediction continually re-locks against the latest
+  /// reference rather than drifting from a stale anchor. BPM is the
+  /// average of the most recent intervals so the cadence is smoother
+  /// than reacting to a single interval.
+  ///
+  /// Algorithm in plain language:
+  ///   - tap at t=0       -> phase=0, no bpm yet, no click scheduled
+  ///   - tap at t=30      -> phase=30, bpm derived from 30 ms interval,
+  ///                          predicted next downbeat at 60
+  ///   - tap at t=60      -> phase=60, predicted next downbeat at 90
+  ///   - if the user stops tapping, the click fires at the prediction;
+  ///   - if they tap again at the prediction, the prediction simply moves
+  ///     forward another interval -- no double-click, no drift.
   void tap() {
     final pos = _ref.read(playerProvider).position.inMilliseconds;
     final history = List<int>.from(state.tapHistoryMs);
@@ -194,7 +208,9 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     }
     history.add(pos);
 
-    // Derive bpm from last 4 taps when we have enough samples.
+    // Derive BPM from intervals once we have at least two taps. We
+    // average the last few intervals so transient jitter (one slightly
+    // late tap) doesn't yank the cadence around.
     double newBpm = state.bpm;
     if (history.length >= 2) {
       final intervals = <int>[];
@@ -204,37 +220,32 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
       }
       final avgMs = intervals.reduce((a, b) => a + b) / intervals.length;
       if (avgMs > 0) {
-        // Clamp to 30..240 to reject obvious mistaps.
-        final candidate = (60000.0 / avgMs).clamp(30.0, 240.0);
-        newBpm = candidate;
+        // Clamp to 30..240 BPM to reject obvious mistaps.
+        newBpm = (60000.0 / avgMs).clamp(30.0, 240.0);
       }
     }
 
-    // The first tap in this burst is the phase anchor.
+    // Phase = most recent tap. Each beat boundary going forward is
+    // phase + N * interval. We set _lastClickedBeatNumber = 0 so the
+    // tap *itself* counts as beat 0 (no click for it -- the user just
+    // produced the audio cue) and the next click fires at beat 1.
     state = state.copyWith(
       bpm: newBpm,
-      phaseOffsetMs: history.first,
+      phaseOffsetMs: history.last,
       tapHistoryMs: history,
       currentBeatIndex: 0,
       bpmIsUserSet: true,
     );
+    _lastClickedBeatNumber = 0;
 
-    // The user already heard the audio they tapped on, so don't fire a
-    // click for the beat slot containing the most recent tap. Mark it
-    // as "already clicked" -- the next tick will pick up from the next
-    // boundary forward.
-    final intervalMs = 60000.0 / newBpm;
-    final relLast = (history.last - history.first).toDouble();
-    final lastBeat = (relLast / intervalMs).floor();
-    _lastClickedBeatNumber = lastBeat;
+    // The next click after a tap burst should be a downbeat -- users
+    // count "1, 2, 3, 4" while tapping and expect the next "1" sound.
+    // beatInBar = (beatNumber - _downbeatAnchor) mod beatsPerBar, so
+    // setting the anchor to 1 makes beat 1 the downbeat.
+    _downbeatAnchor = 1;
 
-    // Treat the next beat after the user's final tap as the downbeat. If
-    // the user counted "1, 2, 3, 4" while tapping, the next click should
-    // be "1" of the new bar -- the high "滴" tick learners listen for.
-    _downbeatAnchor = lastBeat + 1;
-
-    // Re-anchor wall-clock so the next click fires on cadence with the
-    // tap, not a lagging position-stream value.
+    // Drop the wall-clock anchor so the next tick re-locks against the
+    // refreshed phase rather than predicting from a stale baseline.
     _resetAnchor();
 
     _persistOnTrack();
