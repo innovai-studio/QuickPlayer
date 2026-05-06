@@ -3,7 +3,7 @@ class AppConstants {
 
   // App info
   static const appName = 'QuickPlayer';
-  static const appVersion = '1.0.2';
+  static const appVersion = '1.2.0';
 
   // Audio settings
   static const double minSpeed = 0.25;

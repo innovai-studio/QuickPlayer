@@ -4,8 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/audio/audio_player_service.dart';
 import '../../../../core/audio/audio_analyzer_service.dart';
+import '../../../../core/audio/spectrum_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../library/data/models/track.dart';
 import '../../data/models/ab_loop.dart';
@@ -20,6 +22,8 @@ final playerProvider = StateNotifierProvider<PlayerNotifier, AppPlayerState>((re
 class PlayerNotifier extends StateNotifier<AppPlayerState> {
   final AudioPlayerService _audioService = AudioPlayerService();
   final AudioAnalyzerService _analyzerService = AudioAnalyzerService();
+  final AudioEffectsService _effectsService = AudioEffectsService();
+  final SpectrumService _spectrumService = SpectrumService();
   final StorageService _storage = StorageService();
   final _uuid = const Uuid();
   final _random = math.Random();
@@ -30,6 +34,21 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   PlayerNotifier() : super(const AppPlayerState()) {
     _initStreams();
+    _seedFocusFromSettings();
+  }
+
+  /// Seed the in-memory focus preset from persisted user default. Track-level
+  /// memory still wins inside loadTrack -- this only matters for the very
+  /// first track played in a session and for device-audio (which has no
+  /// per-track memory of its own).
+  Future<void> _seedFocusFromSettings() async {
+    await _storage.init();
+    final idx = _storage.getSetting<int>('defaultFocusModeIndex');
+    if (idx == null || idx < 0 || idx >= EqPreset.values.length) return;
+    final preset = EqPreset.values[idx];
+    if (preset != state.focusMode) {
+      state = state.copyWith(focusMode: preset);
+    }
   }
 
   void _initStreams() {
@@ -38,22 +57,175 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       _checkAbLoop(position);
     });
 
-    _audioService.playingStream.listen((playing) {
-      state = state.copyWith(isPlaying: playing);
-    });
-
     _audioService.durationStream.listen((duration) {
       if (duration != null) {
         state = state.copyWith(duration: duration);
       }
     });
 
-    // Listen for track completion
-    _playerStateSubscription = _audioService.playerStateStream.listen((playerState) {
-      if (playerState.processingState == ProcessingState.completed) {
+    // Single source of truth for both isPlaying and track-completion
+    // logic. just_audio's `playing` flag stays true after a natural
+    // end-of-track, so we'd previously race the playingStream against
+    // playerStateStream and the button could flicker stuck in the pause
+    // state. Combine them into one listener: a track is "playing" only
+    // when playing == true AND processingState is not completed/idle.
+    _playerStateSubscription =
+        _audioService.playerStateStream.listen((playerState) {
+      final isCompleted =
+          playerState.processingState == ProcessingState.completed;
+      final effectivelyPlaying = playerState.playing && !isCompleted;
+      if (state.isPlaying != effectivelyPlaying) {
+        state = state.copyWith(isPlaying: effectivelyPlaying);
+      }
+
+      if (isCompleted) {
         _onTrackComplete();
       }
+      // Effects capability becomes known after the first audio session id
+      // arrives -- piggy-back on player state updates to surface it. When
+      // it transitions to available, also seed band levels from the
+      // currently-selected preset so the visualiser has data to render.
+      if (_effectsService.isAvailable != state.focusAvailable) {
+        final levels = _effectsService.presetBandLevels(state.focusMode);
+        final bass = _effectsService.presetBassStrength(state.focusMode);
+        state = state.copyWith(
+          focusAvailable: _effectsService.isAvailable,
+          bandLevelsMillibel: levels != null
+              ? _normaliseToDeviceBands(levels)
+              : state.bandLevelsMillibel,
+          bassStrengthMilli: bass,
+        );
+      }
     });
+  }
+
+  /// Apply a Focus EQ preset. No-op effectively when device doesn't
+  /// support effects, but state still updates so the UI reflects intent.
+  ///
+  /// Persists the choice on the current Track so the same preset is
+  /// re-applied next time the track plays. Device-audio (isExternal)
+  /// tracks are kept in memory only -- they aren't in the Hive box.
+  Future<void> setFocusMode(EqPreset preset) async {
+    await _effectsService.applyPreset(preset);
+
+    final track = state.currentTrack;
+    Track? updatedTrack;
+    if (track != null) {
+      // Switching back to a canned preset wipes any custom band memory
+      // for this track so the next load resolves cleanly.
+      updatedTrack = track.copyWith(
+        focusPresetIndex: preset.index,
+        clearFocusPreset: preset == EqPreset.flat,
+        clearCustomEq: preset.isCanned,
+      );
+      if (!track.isExternal) {
+        await _storage.saveTrack(updatedTrack);
+      }
+    }
+
+    // Seed the visualiser's band levels from the preset table so the
+    // sliders snap to the new shape. Custom presets don't have a table --
+    // leave the existing levels in place.
+    final newLevels = _effectsService.presetBandLevels(preset) != null
+        ? _normaliseToDeviceBands(_effectsService.presetBandLevels(preset)!)
+        : state.bandLevelsMillibel;
+    final newBass = preset.isCanned
+        ? _effectsService.presetBassStrength(preset)
+        : state.bassStrengthMilli;
+
+    state = state.copyWith(
+      focusMode: preset,
+      currentTrack: updatedTrack ?? track,
+      bandLevelsMillibel: _normaliseToDeviceBands(newLevels),
+      bassStrengthMilli: newBass,
+    );
+  }
+
+  /// Turn the real-time spectrum analyser on or off. When turning on we
+  /// request the RECORD_AUDIO permission first; if it's denied the state
+  /// stays disabled. The boolean returned describes whether spectrum is
+  /// actively running afterwards.
+  Future<bool> setSpectrumEnabled(bool enable) async {
+    if (!enable) {
+      await _audioService.setSpectrumEnabled(false);
+      state = state.copyWith(spectrumEnabled: false);
+      return false;
+    }
+    final perm = await _spectrumService.ensurePermission();
+    if (perm != SpectrumPermission.granted) {
+      state = state.copyWith(spectrumEnabled: false);
+      return false;
+    }
+    final ok = await _audioService.setSpectrumEnabled(true);
+    state = state.copyWith(spectrumEnabled: ok);
+    return ok;
+  }
+
+  /// Apply a manual band-level edit. Flips focus mode to custom.
+  Future<void> setBandLevel(int bandIndex, int millibel) async {
+    if (!_effectsService.isAvailable) return;
+    final levels = List<int>.from(state.bandLevelsMillibel);
+    if (bandIndex < 0 || bandIndex >= levels.length) return;
+    levels[bandIndex] = millibel;
+
+    await _effectsService.applyCustom(
+      bandLevelsMillibel: levels,
+      bassStrengthMilli: state.bassStrengthMilli,
+    );
+    state = state.copyWith(
+      focusMode: EqPreset.custom,
+      bandLevelsMillibel: levels,
+    );
+    await _persistCustomEqIfNeeded();
+  }
+
+  /// Apply a manual bass-boost edit. Also flips to custom.
+  Future<void> setBassStrength(int milli) async {
+    if (!_effectsService.isAvailable) return;
+    final clamped = milli.clamp(0, 1000);
+    await _effectsService.applyCustom(
+      bandLevelsMillibel: state.bandLevelsMillibel,
+      bassStrengthMilli: clamped,
+    );
+    state = state.copyWith(
+      focusMode: EqPreset.custom,
+      bassStrengthMilli: clamped,
+    );
+    await _persistCustomEqIfNeeded();
+  }
+
+  /// Resize the band-level list to match the device's actual band count
+  /// (capabilities reported by the platform). Linearly interpolates if
+  /// our 5-element preset table doesn't line up with the device.
+  List<int> _normaliseToDeviceBands(List<int> source) {
+    final caps = _effectsService.capabilities;
+    final target = caps.numberOfBands;
+    if (target <= 0 || source.isEmpty) return source;
+    if (source.length == target) return source;
+
+    final out = List<int>.filled(target, 0);
+    final srcLast = source.length - 1;
+    final tgtLast = target - 1;
+    for (int i = 0; i < target; i++) {
+      final pos = tgtLast == 0 ? 0.0 : i * srcLast / tgtLast;
+      final lo = pos.toInt().clamp(0, srcLast);
+      final hi = (lo + 1).clamp(0, srcLast);
+      final frac = pos - lo;
+      out[i] = (source[lo] * (1 - frac) + source[hi] * frac).round();
+    }
+    return out;
+  }
+
+  Future<void> _persistCustomEqIfNeeded() async {
+    final track = state.currentTrack;
+    if (track == null || track.isExternal) return;
+    final updated = track.copyWith(
+      focusPresetIndex: EqPreset.custom.index,
+      customBandLevels: List<int>.from(state.bandLevelsMillibel),
+      customBassStrength: state.bassStrengthMilli,
+    );
+    await _storage.saveTrack(updated);
+    state = state.copyWith(currentTrack: updated);
   }
 
   /// Handle track completion based on play mode
@@ -65,10 +237,10 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       case PlayMode.sequential:
         if (state.hasNext) {
           playNext();
-        } else {
-          // Stop at end of queue
-          _audioService.stop();
         }
+        // Otherwise let the player rest in its completed state with
+        // position == duration. The next togglePlay will detect the
+        // end-of-track condition, seek to 0, and play again.
         break;
       case PlayMode.loopAll:
         playNext();
@@ -81,10 +253,8 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       case PlayMode.shuffle:
         if (state.hasNext) {
           playNext();
-        } else {
-          // Stop at end of shuffled queue
-          _audioService.stop();
         }
+        // Same idle-at-end behaviour as sequential.
         break;
     }
   }
@@ -101,35 +271,52 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
   /// Load and play a track
   Future<void> loadTrack(Track track) async {
     try {
+      // Always re-read the latest persisted track from storage. Callers
+      // (queue, library list) hold in-memory references that were
+      // captured at load time and don't reflect later setBandLevel /
+      // setFocusMode / BPM-analysis updates. Without this, switching
+      // away from a tuned track and coming back loses the EQ memory
+      // because we'd resolve focus / levels against a stale Track.
+      final fresh = !track.isExternal
+          ? (_storage.getTrack(track.id) ?? track)
+          : track;
+
       // Clear previous track and show loading state
       state = state.copyWith(
         isLoading: true,
         clearError: true,
-        currentTrack: track,  // Show new track info immediately
+        currentTrack: fresh, // Show new track info immediately
         position: Duration.zero,
         duration: Duration.zero,
-        clearAbLoop: true,  // Clear A-B loop state for new track
+        clearAbLoop: true, // Clear A-B loop state for new track
       );
 
       // Check if file exists
-      final file = File(track.filePath);
+      final file = File(fresh.filePath);
       if (!await file.exists()) {
-        throw Exception('Audio file not found: ${track.filePath}');
+        throw Exception('Audio file not found: ${fresh.filePath}');
       }
 
       // Load new file (this will stop previous playback and reset player)
-      final duration = await _audioService.loadFile(track.filePath);
-      final markers = _storage.getMarkersForTrack(track.id);
+      final duration = await _audioService.loadFile(fresh.filePath);
+      final markers = _storage.getMarkersForTrack(fresh.id);
 
       // Update last played (only for non-external tracks)
       Track updatedTrack;
-      if (!track.isExternal) {
-        updatedTrack = track.copyWith(lastPlayedAt: DateTime.now());
+      if (!fresh.isExternal) {
+        updatedTrack = fresh.copyWith(lastPlayedAt: DateTime.now());
         await _storage.saveTrack(updatedTrack);
-        await _storage.setLastTrackId(track.id);
+        await _storage.setLastTrackId(fresh.id);
       } else {
-        updatedTrack = track;
+        updatedTrack = fresh;
       }
+
+      // Resolve which Focus preset to apply: track-specific memory wins,
+      // otherwise fall back to whatever's currently active (which itself
+      // was seeded from defaults at app start).
+      final resolvedFocus = _resolveFocusForTrack(updatedTrack);
+      final resolvedLevels = _resolveBandLevels(updatedTrack, resolvedFocus);
+      final resolvedBass = _resolveBassStrength(updatedTrack, resolvedFocus);
 
       state = state.copyWith(
         currentTrack: updatedTrack,
@@ -138,7 +325,20 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         markers: markers,
         isLoading: false,
         clearAbLoop: true,
+        focusMode: resolvedFocus,
+        bandLevelsMillibel: resolvedLevels,
+        bassStrengthMilli: resolvedBass,
       );
+
+      // Apply on the audio session (no-op if effects unsupported).
+      if (resolvedFocus == EqPreset.custom) {
+        await _effectsService.applyCustom(
+          bandLevelsMillibel: resolvedLevels,
+          bassStrengthMilli: resolvedBass,
+        );
+      } else {
+        await _effectsService.applyPreset(resolvedFocus);
+      }
 
       // Start analysis immediately (before play) if BPM/Key not set
       if (updatedTrack.bpm == null || updatedTrack.musicalKey == null) {
@@ -153,6 +353,36 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         error: 'Failed to load track: $e',
       );
     }
+  }
+
+  EqPreset _resolveFocusForTrack(Track track) {
+    final idx = track.focusPresetIndex;
+    if (idx == null) return state.focusMode;
+    if (idx < 0 || idx >= EqPreset.values.length) return EqPreset.flat;
+    return EqPreset.values[idx];
+  }
+
+  /// Pick which band levels to seed in state for this (track, preset).
+  /// Custom prefers the track's stored levels; canned presets pull from
+  /// the preset table; falls back to current state when neither applies.
+  List<int> _resolveBandLevels(Track track, EqPreset preset) {
+    if (preset == EqPreset.custom) {
+      final stored = track.customBandLevels;
+      if (stored != null && stored.isNotEmpty) {
+        return _normaliseToDeviceBands(List<int>.from(stored));
+      }
+      return _normaliseToDeviceBands(state.bandLevelsMillibel);
+    }
+    final canned = _effectsService.presetBandLevels(preset);
+    if (canned != null) return _normaliseToDeviceBands(canned);
+    return state.bandLevelsMillibel;
+  }
+
+  int _resolveBassStrength(Track track, EqPreset preset) {
+    if (preset == EqPreset.custom) {
+      return track.customBassStrength ?? state.bassStrengthMilli;
+    }
+    return _effectsService.presetBassStrength(preset);
   }
 
   /// Load and play audio directly from file path (for device audio)
@@ -197,16 +427,27 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       final duration = await _audioService.loadFile(filePath);
       final markers = _storage.getMarkersForTrack(tempTrack.id);
 
+      // Device-audio tracks aren't persisted, so they don't carry their
+      // own focus memory -- inherit whatever the player currently has.
+      await _effectsService.applyPreset(state.focusMode);
+
+      final loadedTrack = tempTrack.copyWith(
+        durationMs: duration?.inMilliseconds ?? durationMs ?? 0,
+      );
+
       state = state.copyWith(
-        currentTrack: tempTrack.copyWith(
-          durationMs: duration?.inMilliseconds ?? durationMs ?? 0,
-        ),
+        currentTrack: loadedTrack,
         duration: duration ?? Duration.zero,
         position: Duration.zero,
         markers: markers,
         isLoading: false,
         clearAbLoop: true,
       );
+
+      // Device audio doesn't carry persisted BPM/Key, so always kick off
+      // analysis. Result lives in memory only (skipped in _analyzeTrack
+      // for isExternal tracks) so the UI updates without polluting Hive.
+      _analyzeTrack(loadedTrack);
 
       await _audioService.play();
     } catch (e) {
@@ -363,9 +604,18 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
   Future<void> togglePlay() async {
     if (state.isPlaying) {
       await _audioService.pause();
-    } else {
-      await _audioService.play();
+      return;
     }
+    // After a track finishes the player can be in a completed/idle
+    // state where play() alone won't restart it. If position is at
+    // (or past) duration, rewind to the start so the next play
+    // actually plays from the beginning.
+    final duration = state.duration;
+    if (duration > Duration.zero &&
+        state.position >= duration - const Duration(milliseconds: 200)) {
+      await _audioService.seek(Duration.zero);
+    }
+    await _audioService.play();
   }
 
   /// Seek to position
@@ -479,6 +729,7 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   /// Stop playback and clear current track
   Future<void> stopAndClear() async {
+    await _audioService.setSpectrumEnabled(false);
     await _audioService.stop();
     state = const AppPlayerState();
   }
@@ -507,7 +758,11 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
           musicalKey: result.key ?? track.musicalKey,
         );
 
-        await _storage.saveTrack(updatedTrack);
+        // External (device-audio) tracks aren't in the Hive box, so skip
+        // persistence and just update the in-memory player state.
+        if (!track.isExternal) {
+          await _storage.saveTrack(updatedTrack);
+        }
         state = state.copyWith(
           currentTrack: updatedTrack,
           isAnalyzing: false,

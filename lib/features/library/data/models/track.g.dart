@@ -28,13 +28,17 @@ class TrackAdapter extends TypeAdapter<Track> {
       bpm: fields[8] as int?,
       musicalKey: fields[9] as String?,
       isExternal: fields[10] == null ? false : fields[10] as bool,
+      focusPresetIndex: fields[11] as int?,
+      customBandLevels: (fields[12] as List?)?.cast<int>(),
+      customBassStrength: fields[13] as int?,
+      metronomePhaseOffsetMs: fields[14] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Track obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +60,15 @@ class TrackAdapter extends TypeAdapter<Track> {
       ..writeByte(9)
       ..write(obj.musicalKey)
       ..writeByte(10)
-      ..write(obj.isExternal);
+      ..write(obj.isExternal)
+      ..writeByte(11)
+      ..write(obj.focusPresetIndex)
+      ..writeByte(12)
+      ..write(obj.customBandLevels)
+      ..writeByte(13)
+      ..write(obj.customBassStrength)
+      ..writeByte(14)
+      ..write(obj.metronomePhaseOffsetMs);
   }
 
   @override

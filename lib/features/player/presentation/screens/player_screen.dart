@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/extensions/duration_extension.dart';
 import '../../../library/data/models/track.dart';
@@ -14,8 +15,10 @@ import '../widgets/playback_controls.dart';
 import '../widgets/speed_control.dart';
 import '../widgets/pitch_control.dart';
 import '../widgets/ab_loop_control.dart';
+import '../widgets/focus_mode_control.dart';
 import '../widgets/marker_list.dart';
 import '../widgets/waveform_view.dart';
+import '../../../metronome/presentation/widgets/metronome_control.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String trackId;
@@ -167,6 +170,44 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             .read(playerProvider.notifier)
                             .setPitchSemitones(semitones),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Focus EQ (hidden on devices without AudioEffect)
+                      FocusModeControl(
+                        preset: playerState.focusMode,
+                        available: playerState.focusAvailable,
+                        capabilities: AudioEffectsService().capabilities,
+                        bandLevelsMillibel: playerState.bandLevelsMillibel,
+                        bassStrengthMilli: playerState.bassStrengthMilli,
+                        spectrumEnabled: playerState.spectrumEnabled,
+                        onPresetChanged: (preset) => ref
+                            .read(playerProvider.notifier)
+                            .setFocusMode(preset),
+                        onBandChanged: (i, mb) => ref
+                            .read(playerProvider.notifier)
+                            .setBandLevel(i, mb),
+                        onBassChanged: (m) => ref
+                            .read(playerProvider.notifier)
+                            .setBassStrength(m),
+                        onSpectrumToggle: (enable) async {
+                          final ok = await ref
+                              .read(playerProvider.notifier)
+                              .setSpectrumEnabled(enable);
+                          if (enable && !ok && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Microphone permission required for live spectrum'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      if (playerState.focusAvailable)
+                        const SizedBox(height: 16),
+
+                      // Metronome
+                      const MetronomeControl(),
                       const SizedBox(height: 16),
 
                       // A-B Loop control

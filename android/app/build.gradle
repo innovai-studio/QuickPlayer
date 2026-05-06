@@ -15,7 +15,11 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.quickplayer.quickplayer"
     compileSdk = 35
-    ndkVersion = flutter.ndkVersion
+    // Pin to NDK r27 -- the Flutter-default ndkVersion (r26) emits
+    // .so files with 4 KB ELF alignment, which Play Console rejects
+    // since Android 15+ devices may use 16 KB memory pages. r27
+    // produces 16 KB-aligned binaries by default.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,6 +28,33 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // libsqlite3.so / libmedia_kit_*.so come from media_kit, which we
+    // only use on Linux desktop builds (gated in main.dart). Including
+    // them in the Android APK is dead weight, and media_kit's
+    // armeabi-v7a libsqlite3.so ships at 4 KB ELF alignment which fails
+    // the Play Console 16 KB page-size check. Excluding them removes
+    // the failing lib without having to drop the Linux desktop dep.
+    //
+    // useLegacyPackaging=false also forces the packager to extract +
+    // repack jniLibs so the alignment check runs at build time.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            excludes += [
+                '**/libsqlite3.so',
+                '**/libmedia_kit_*.so',
+                '**/libavcodec.so',
+                '**/libavformat.so',
+                '**/libavutil.so',
+                '**/libswresample.so',
+                '**/libswscale.so',
+                '**/libavfilter.so',
+                '**/libavdevice.so',
+                '**/libmpv.so',
+            ]
+        }
     }
 
     signingConfigs {
@@ -49,6 +80,13 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Bundle native debug symbols inside the AAB so Play Console
+            // can symbolicate native crash reports without us uploading
+            // a separate symbols.zip after every release.
+            ndk {
+                debugSymbolLevel = 'SYMBOL_TABLE'
+            }
         }
     }
 }

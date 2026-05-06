@@ -4,6 +4,12 @@
     <!-- Android 13+ fine-grained media permissions (audio only) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
+    <!-- Required by android.media.audiofx.Visualizer (output-mix tap)
+         on API 28+. We only use it to read this app's own playback for
+         the real-time spectrum analyser; we never record from the mic. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+
     <!-- Android 12 and below only - limited to SDK 32 to avoid photo/video permission issues -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
 
@@ -15,7 +21,8 @@
     <application
         android:label="quickplayer"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'core/constants/app_colors.dart';
 import 'core/storage/storage_service.dart';
 import 'routing/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize JustAudioMediaKit for Linux audio support
-  JustAudioMediaKit.ensureInitialized();
 
   // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(

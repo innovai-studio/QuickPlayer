@@ -49,3 +49,9 @@ android/key.properties
 android/app/keystore/
 *.jks
 *.keystore
+
+# Release artifacts -- built from source via flutter build appbundle/apk.
+# Don't track ~50 MB binaries in git; produce them fresh per release.
+release-v*/
+*.aab
+*.apk

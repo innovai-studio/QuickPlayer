@@ -38,6 +38,27 @@ class Track extends HiveObject {
   @HiveField(10, defaultValue: false)
   final bool isExternal;
 
+  /// Index of the EqPreset most recently used for this track. Stored as int
+  /// (rather than the enum directly) to avoid forcing a Hive type adapter on
+  /// the enum and to remain robust to enum reordering -- see EqPreset doc.
+  @HiveField(11)
+  int? focusPresetIndex;
+
+  /// Per-band millibel offsets when the user has manually tuned the EQ.
+  /// Only populated for the `custom` preset; null for canned presets.
+  @HiveField(12)
+  List<int>? customBandLevels;
+
+  /// Bass-boost strength (0..1000) when in custom mode. Null otherwise.
+  @HiveField(13)
+  int? customBassStrength;
+
+  /// Player position (ms) of the user-tapped first beat. Null when the
+  /// user hasn't aligned the metronome for this track yet. Survives
+  /// across plays so re-opening the song doesn't lose the alignment.
+  @HiveField(14)
+  int? metronomePhaseOffsetMs;
+
   Track({
     required this.id,
     required this.name,
@@ -50,6 +71,10 @@ class Track extends HiveObject {
     this.bpm,
     this.musicalKey,
     this.isExternal = false,
+    this.focusPresetIndex,
+    this.customBandLevels,
+    this.customBassStrength,
+    this.metronomePhaseOffsetMs,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -66,6 +91,13 @@ class Track extends HiveObject {
     int? bpm,
     String? musicalKey,
     bool? isExternal,
+    int? focusPresetIndex,
+    List<int>? customBandLevels,
+    int? customBassStrength,
+    int? metronomePhaseOffsetMs,
+    bool clearFocusPreset = false,
+    bool clearCustomEq = false,
+    bool clearMetronome = false,
   }) {
     return Track(
       id: id ?? this.id,
@@ -79,6 +111,17 @@ class Track extends HiveObject {
       bpm: bpm ?? this.bpm,
       musicalKey: musicalKey ?? this.musicalKey,
       isExternal: isExternal ?? this.isExternal,
+      focusPresetIndex:
+          clearFocusPreset ? null : (focusPresetIndex ?? this.focusPresetIndex),
+      customBandLevels: clearCustomEq
+          ? null
+          : (customBandLevels ?? this.customBandLevels),
+      customBassStrength: clearCustomEq
+          ? null
+          : (customBassStrength ?? this.customBassStrength),
+      metronomePhaseOffsetMs: clearMetronome
+          ? null
+          : (metronomePhaseOffsetMs ?? this.metronomePhaseOffsetMs),
     );
   }
 

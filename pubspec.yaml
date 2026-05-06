@@ -1,7 +1,7 @@
 name: quickplayer
 description: "Music practice assistant with speed/pitch control and A-B loop"
 publish_to: 'none'
-version: 1.1.0+7
+version: 1.2.0+14
 
 environment:
   sdk: ^3.6.1
@@ -19,10 +19,12 @@ dependencies:
   # Routing
   go_router: ^14.6.2
 
-  # Audio
+  # Audio. just_audio_media_kit + media_kit_libs_linux were a Linux
+  # desktop fallback, but they drag a 4 KB-aligned libsqlite3.so into
+  # the Android APK that fails Play Store's 16 KB page-size check.
+  # Removing them keeps the mobile build clean -- just_audio handles
+  # Android natively.
   just_audio: ^0.9.42
-  just_audio_media_kit: ^2.0.0
-  media_kit_libs_linux: any
   audio_session: ^0.1.21
   audio_waveforms: ^1.2.0
 
@@ -62,3 +64,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/store/
+    - assets/sounds/

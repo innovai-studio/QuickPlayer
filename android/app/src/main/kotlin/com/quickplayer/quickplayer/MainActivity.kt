@@ -5,6 +5,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.*
 import java.io.File
@@ -17,10 +18,23 @@ import kotlin.math.PI
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.quickplayer/audio_analyzer"
+    private val EFFECTS_CHANNEL = "com.quickplayer/audio_effects"
+    private val SPECTRUM_METHOD_CHANNEL = "com.quickplayer/spectrum/control"
+    private val SPECTRUM_EVENT_CHANNEL = "com.quickplayer/spectrum/stream"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val effectsHandler = AudioEffectsHandler()
+    private val spectrumHandler = SpectrumHandler()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, EFFECTS_CHANNEL)
+            .setMethodCallHandler(effectsHandler)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPECTRUM_METHOD_CHANNEL)
+            .setMethodCallHandler(spectrumHandler)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, SPECTRUM_EVENT_CHANNEL)
+            .setStreamHandler(spectrumHandler)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -366,5 +380,7 @@ class MainActivity: FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
+        effectsHandler.release()
+        spectrumHandler.release()
     }
 }
