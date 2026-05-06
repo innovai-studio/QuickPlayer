@@ -271,34 +271,44 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
   /// Load and play a track
   Future<void> loadTrack(Track track) async {
     try {
+      // Always re-read the latest persisted track from storage. Callers
+      // (queue, library list) hold in-memory references that were
+      // captured at load time and don't reflect later setBandLevel /
+      // setFocusMode / BPM-analysis updates. Without this, switching
+      // away from a tuned track and coming back loses the EQ memory
+      // because we'd resolve focus / levels against a stale Track.
+      final fresh = !track.isExternal
+          ? (_storage.getTrack(track.id) ?? track)
+          : track;
+
       // Clear previous track and show loading state
       state = state.copyWith(
         isLoading: true,
         clearError: true,
-        currentTrack: track,  // Show new track info immediately
+        currentTrack: fresh, // Show new track info immediately
         position: Duration.zero,
         duration: Duration.zero,
-        clearAbLoop: true,  // Clear A-B loop state for new track
+        clearAbLoop: true, // Clear A-B loop state for new track
       );
 
       // Check if file exists
-      final file = File(track.filePath);
+      final file = File(fresh.filePath);
       if (!await file.exists()) {
-        throw Exception('Audio file not found: ${track.filePath}');
+        throw Exception('Audio file not found: ${fresh.filePath}');
       }
 
       // Load new file (this will stop previous playback and reset player)
-      final duration = await _audioService.loadFile(track.filePath);
-      final markers = _storage.getMarkersForTrack(track.id);
+      final duration = await _audioService.loadFile(fresh.filePath);
+      final markers = _storage.getMarkersForTrack(fresh.id);
 
       // Update last played (only for non-external tracks)
       Track updatedTrack;
-      if (!track.isExternal) {
-        updatedTrack = track.copyWith(lastPlayedAt: DateTime.now());
+      if (!fresh.isExternal) {
+        updatedTrack = fresh.copyWith(lastPlayedAt: DateTime.now());
         await _storage.saveTrack(updatedTrack);
-        await _storage.setLastTrackId(track.id);
+        await _storage.setLastTrackId(fresh.id);
       } else {
-        updatedTrack = track;
+        updatedTrack = fresh;
       }
 
       // Resolve which Focus preset to apply: track-specific memory wins,

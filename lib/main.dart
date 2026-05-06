@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,8 +10,15 @@ import 'routing/app_router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize JustAudioMediaKit for Linux audio support
-  JustAudioMediaKit.ensureInitialized();
+  // JustAudioMediaKit is only the fallback for Linux/Windows desktop -- on
+  // Android/iOS the regular just_audio platform plugin is used. Calling
+  // ensureInitialized() unconditionally spins up libmpv as a parallel
+  // audio system that survives Flutter VM teardown, which causes audio
+  // to keep playing after the app is closed. Gate on platform so mobile
+  // builds don't initialise it.
+  if (Platform.isLinux || Platform.isWindows) {
+    JustAudioMediaKit.ensureInitialized();
+  }
 
   // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(

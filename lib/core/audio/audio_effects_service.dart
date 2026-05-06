@@ -91,6 +91,14 @@ class AudioEffectsService {
   int? _boundSessionId;
   EqPreset _activePreset = EqPreset.flat;
 
+  /// Cache of the most recent applyCustom(). When the audio session is
+  /// rebound (typically on track change) we replay these values so the
+  /// new Equalizer doesn't snap back to flat -- applyPreset(custom) is
+  /// a no-op by design, so without the cache the user's tuning is lost
+  /// every time tracks switch.
+  List<int>? _lastCustomBandLevels;
+  int _lastCustomBassStrength = 0;
+
   AudioEffectsCapabilities get capabilities => _capabilities;
   EqPreset get activePreset => _activePreset;
 
@@ -117,8 +125,19 @@ class AudioEffectsService {
       _boundSessionId = sessionId;
 
       // Re-apply the active preset against the freshly-bound session.
-      if (_capabilities.supported && _activePreset != EqPreset.flat) {
-        await applyPreset(_activePreset);
+      // applyPreset is a no-op for custom (no canned table to reach for),
+      // so for custom we replay the cached band levels directly. Without
+      // this, switching tracks would silently reset the user's tuning.
+      if (_capabilities.supported) {
+        if (_activePreset == EqPreset.custom &&
+            _lastCustomBandLevels != null) {
+          await applyCustom(
+            bandLevelsMillibel: _lastCustomBandLevels!,
+            bassStrengthMilli: _lastCustomBassStrength,
+          );
+        } else if (_activePreset != EqPreset.flat) {
+          await applyPreset(_activePreset);
+        }
       }
     } on PlatformException {
       _capabilities = AudioEffectsCapabilities.unsupported;
@@ -153,6 +172,8 @@ class AudioEffectsService {
     required int bassStrengthMilli,
   }) async {
     _activePreset = EqPreset.custom;
+    _lastCustomBandLevels = List<int>.from(bandLevelsMillibel);
+    _lastCustomBassStrength = bassStrengthMilli;
     if (!isAvailable) return;
     try {
       await _channel.invokeMethod<void>('applyPreset', {
