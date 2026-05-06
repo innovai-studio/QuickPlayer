@@ -30,12 +30,30 @@ android {
         jvmTarget = "17"
     }
 
-    // Tell the packager to extract + repack jniLibs so the alignment
-    // check runs at build time and we can't ship a 4 KB-aligned .so
-    // sneaking in from a transitive AAR dependency.
-    packagingOptions {
+    // libsqlite3.so / libmedia_kit_*.so come from media_kit, which we
+    // only use on Linux desktop builds (gated in main.dart). Including
+    // them in the Android APK is dead weight, and media_kit's
+    // armeabi-v7a libsqlite3.so ships at 4 KB ELF alignment which fails
+    // the Play Console 16 KB page-size check. Excluding them removes
+    // the failing lib without having to drop the Linux desktop dep.
+    //
+    // useLegacyPackaging=false also forces the packager to extract +
+    // repack jniLibs so the alignment check runs at build time.
+    packaging {
         jniLibs {
             useLegacyPackaging = false
+            excludes += [
+                '**/libsqlite3.so',
+                '**/libmedia_kit_*.so',
+                '**/libavcodec.so',
+                '**/libavformat.so',
+                '**/libavutil.so',
+                '**/libswresample.so',
+                '**/libswscale.so',
+                '**/libavfilter.so',
+                '**/libavdevice.so',
+                '**/libmpv.so',
+            ]
         }
     }
 

@@ -18,7 +18,11 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.3.0" apply false
+    // AGP 8.7+ aligns native libs to 16 KB inside the APK by default,
+    // which Play Store now requires (Android 15+ devices may use 16 KB
+    // memory pages and cannot mmap libs at smaller offsets). 8.3 left
+    // the offsets unaligned regardless of useLegacyPackaging.
+    id "com.android.application" version "8.7.3" apply false
     id "org.jetbrains.kotlin.android" version "1.9.22" apply false
 }
 
