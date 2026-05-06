@@ -259,21 +259,17 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     );
     _lastClickedBeatNumber = 0;
 
-    // The taps cover one full bar -- the user counted "1 2 3 4" while
-    // tapping, with the last tap being "4". The metronome therefore
-    // takes over from the next "1" (downbeat of the new bar). With
-    // phase = lastTap, beat 0 is "4" (suppressed because it was the
-    // user's tap) and beat 1 is "1" of the new bar.
-    //
-    // beatInBar = (beatNumber - _downbeatAnchor) mod beatsPerBar:
-    //   beat 0 (lastTap) = "4"  (suppressed)
-    //   beat 1 (first click) = "1" 滴 (BIG dot lights, high tick)
-    //   beat 2 = "2" 搭
-    //   beat 3 = "3" 答
-    //   beat 4 = "4" 答
-    //   beat 5 = next "1" 滴 ...
-    // The visual / audible cycle is therefore "滴 搭 答 答" repeated.
-    _downbeatAnchor = 1;
+    // The user's tap *is* "1" (the downbeat). Their tap produced its
+    // own audio cue, so the metronome doesn't click for it -- it picks
+    // up from "2" and only reaches the next "1" after a full bar.
+    // With phase = lastTap and _downbeatAnchor = 0:
+    //   beat 0 (lastTap)   = "1" 滴  (suppressed, user's tap is the cue)
+    //   beat 1 (1st click) = "2" 搭  (low)
+    //   beat 2             = "3" 答  (low)
+    //   beat 3             = "4" 答  (low)
+    //   beat 4             = next "1" 滴 (HIGH, BIG dot lights)
+    //   ... cycle "滴 搭 答 答" repeats from then on.
+    _downbeatAnchor = 0;
 
     // Lock wall-clock at the moment of the tap. From here every click
     // is scheduled relative to (wallNowMs, pos) so the very next click

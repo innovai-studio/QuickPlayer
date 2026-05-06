@@ -57,19 +57,28 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       _checkAbLoop(position);
     });
 
-    _audioService.playingStream.listen((playing) {
-      state = state.copyWith(isPlaying: playing);
-    });
-
     _audioService.durationStream.listen((duration) {
       if (duration != null) {
         state = state.copyWith(duration: duration);
       }
     });
 
-    // Listen for track completion
-    _playerStateSubscription = _audioService.playerStateStream.listen((playerState) {
-      if (playerState.processingState == ProcessingState.completed) {
+    // Single source of truth for both isPlaying and track-completion
+    // logic. just_audio's `playing` flag stays true after a natural
+    // end-of-track, so we'd previously race the playingStream against
+    // playerStateStream and the button could flicker stuck in the pause
+    // state. Combine them into one listener: a track is "playing" only
+    // when playing == true AND processingState is not completed/idle.
+    _playerStateSubscription =
+        _audioService.playerStateStream.listen((playerState) {
+      final isCompleted =
+          playerState.processingState == ProcessingState.completed;
+      final effectivelyPlaying = playerState.playing && !isCompleted;
+      if (state.isPlaying != effectivelyPlaying) {
+        state = state.copyWith(isPlaying: effectivelyPlaying);
+      }
+
+      if (isCompleted) {
         _onTrackComplete();
       }
       // Effects capability becomes known after the first audio session id
@@ -228,10 +237,10 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       case PlayMode.sequential:
         if (state.hasNext) {
           playNext();
-        } else {
-          // Stop at end of queue
-          _audioService.stop();
         }
+        // Otherwise let the player rest in its completed state with
+        // position == duration. The next togglePlay will detect the
+        // end-of-track condition, seek to 0, and play again.
         break;
       case PlayMode.loopAll:
         playNext();
@@ -244,10 +253,8 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       case PlayMode.shuffle:
         if (state.hasNext) {
           playNext();
-        } else {
-          // Stop at end of shuffled queue
-          _audioService.stop();
         }
+        // Same idle-at-end behaviour as sequential.
         break;
     }
   }
@@ -587,9 +594,18 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
   Future<void> togglePlay() async {
     if (state.isPlaying) {
       await _audioService.pause();
-    } else {
-      await _audioService.play();
+      return;
     }
+    // After a track finishes the player can be in a completed/idle
+    // state where play() alone won't restart it. If position is at
+    // (or past) duration, rewind to the start so the next play
+    // actually plays from the beginning.
+    final duration = state.duration;
+    if (duration > Duration.zero &&
+        state.position >= duration - const Duration(milliseconds: 200)) {
+      await _audioService.seek(Duration.zero);
+    }
+    await _audioService.play();
   }
 
   /// Seek to position
