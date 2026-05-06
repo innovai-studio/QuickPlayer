@@ -15,7 +15,11 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.quickplayer.quickplayer"
     compileSdk = 35
-    ndkVersion = flutter.ndkVersion
+    // Pin to NDK r27 -- the Flutter-default ndkVersion (r26) emits
+    // .so files with 4 KB ELF alignment, which Play Console rejects
+    // since Android 15+ devices may use 16 KB memory pages. r27
+    // produces 16 KB-aligned binaries by default.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,6 +28,15 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // Tell the packager to extract + repack jniLibs so the alignment
+    // check runs at build time and we can't ship a 4 KB-aligned .so
+    // sneaking in from a transitive AAR dependency.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 
     signingConfigs {
@@ -49,6 +62,13 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Bundle native debug symbols inside the AAB so Play Console
+            // can symbolicate native crash reports without us uploading
+            // a separate symbols.zip after every release.
+            ndk {
+                debugSymbolLevel = 'SYMBOL_TABLE'
+            }
         }
     }
 }
