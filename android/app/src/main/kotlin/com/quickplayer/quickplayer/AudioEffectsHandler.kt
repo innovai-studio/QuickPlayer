@@ -2,6 +2,7 @@ package com.quickplayer.quickplayer
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -18,14 +19,57 @@ class AudioEffectsHandler : MethodChannel.MethodCallHandler {
     private var bassBoost: BassBoost? = null
     private var currentSessionId: Int = 0
 
+    /// Per-session LoudnessEnhancer instances. Keyed by audio session id
+    /// rather than tied to currentSessionId because the metronome attaches
+    /// to its own click-player sessions, separate from the main song
+    /// session that EQ runs on.
+    private val loudnessEnhancers = mutableMapOf<Int, LoudnessEnhancer>()
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "init" -> handleInit(call, result)
             "applyPreset" -> handleApplyPreset(call, result)
             "setEnabled" -> handleSetEnabled(call, result)
             "release" -> handleRelease(result)
+            "attachLoudness" -> handleAttachLoudness(call, result)
+            "detachLoudness" -> handleDetachLoudness(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    private fun handleAttachLoudness(call: MethodCall, result: MethodChannel.Result) {
+        val sessionId = call.argument<Int>("sessionId")
+        val gainMillibel = call.argument<Int>("gainMillibel") ?: 1500
+        if (sessionId == null || sessionId == 0) {
+            result.error("INVALID_ARGUMENT", "sessionId required", null)
+            return
+        }
+        try {
+            // Replace any existing enhancer for this session.
+            loudnessEnhancers[sessionId]?.let {
+                try { it.release() } catch (_: Throwable) {}
+            }
+            val le = LoudnessEnhancer(sessionId).apply {
+                setTargetGain(gainMillibel)
+                enabled = true
+            }
+            loudnessEnhancers[sessionId] = le
+            result.success(true)
+        } catch (e: Throwable) {
+            result.error("LE_FAILED", e.message ?: "LoudnessEnhancer failed", null)
+        }
+    }
+
+    private fun handleDetachLoudness(call: MethodCall, result: MethodChannel.Result) {
+        val sessionId = call.argument<Int>("sessionId")
+        if (sessionId == null) {
+            result.success(null)
+            return
+        }
+        loudnessEnhancers.remove(sessionId)?.let {
+            try { it.release() } catch (_: Throwable) {}
+        }
+        result.success(null)
     }
 
     private fun handleInit(call: MethodCall, result: MethodChannel.Result) {
@@ -120,6 +164,10 @@ class AudioEffectsHandler : MethodChannel.MethodCallHandler {
     fun release() {
         try { equalizer?.release() } catch (_: Throwable) {}
         try { bassBoost?.release() } catch (_: Throwable) {}
+        for (le in loudnessEnhancers.values) {
+            try { le.release() } catch (_: Throwable) {}
+        }
+        loudnessEnhancers.clear()
         equalizer = null
         bassBoost = null
         currentSessionId = 0

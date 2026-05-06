@@ -163,7 +163,28 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     // can refine later with the Tap button.
     final phase = state.phaseOffsetMs >= 0 ? state.phaseOffsetMs : 0;
     state = state.copyWith(enabled: true, phaseOffsetMs: phase);
-    _lastClickedBeatNumber = -1;
+
+    if (state.bpmIsUserSet) {
+      // tap() already set _lastClickedBeatNumber and _downbeatAnchor so
+      // the next click is the user-aligned "1". Keep those.
+    } else {
+      // No tap alignment: the user just flipped the switch, possibly mid-
+      // song. Make the first audible click the downbeat (high "滴")
+      // regardless of where in the bar grid we happen to be -- listeners
+      // expect the cycle to start with the big dot, not a random offbeat.
+      final positionMs =
+          _ref.read(playerProvider).position.inMilliseconds;
+      final intervalMs = 60000.0 / state.bpm;
+      final relMs = positionMs - phase;
+      if (relMs > 0) {
+        final currentBeatSlot = (relMs / intervalMs).floor();
+        _lastClickedBeatNumber = currentBeatSlot;
+        _downbeatAnchor = currentBeatSlot + 1;
+      } else {
+        _lastClickedBeatNumber = -1;
+        _downbeatAnchor = 0;
+      }
+    }
     _resetAnchor();
     _startTicker();
   }
@@ -238,15 +259,29 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     );
     _lastClickedBeatNumber = 0;
 
-    // The next click after a tap burst should be a downbeat -- users
-    // count "1, 2, 3, 4" while tapping and expect the next "1" sound.
-    // beatInBar = (beatNumber - _downbeatAnchor) mod beatsPerBar, so
-    // setting the anchor to 1 makes beat 1 the downbeat.
+    // The taps cover one full bar -- the user counted "1 2 3 4" while
+    // tapping, with the last tap being "4". The metronome therefore
+    // takes over from the next "1" (downbeat of the new bar). With
+    // phase = lastTap, beat 0 is "4" (suppressed because it was the
+    // user's tap) and beat 1 is "1" of the new bar.
+    //
+    // beatInBar = (beatNumber - _downbeatAnchor) mod beatsPerBar:
+    //   beat 0 (lastTap) = "4"  (suppressed)
+    //   beat 1 (first click) = "1" 滴 (BIG dot lights, high tick)
+    //   beat 2 = "2" 搭
+    //   beat 3 = "3" 答
+    //   beat 4 = "4" 答
+    //   beat 5 = next "1" 滴 ...
+    // The visual / audible cycle is therefore "滴 搭 答 答" repeated.
     _downbeatAnchor = 1;
 
-    // Drop the wall-clock anchor so the next tick re-locks against the
-    // refreshed phase rather than predicting from a stale baseline.
-    _resetAnchor();
+    // Lock wall-clock at the moment of the tap. From here every click
+    // is scheduled relative to (wallNowMs, pos) so the very next click
+    // fires at exactly pos + interval in real time, not "whenever the
+    // next ticker frame happens to read a fresh player position". This
+    // is what gives the metronome a stable, accurate beat after tap.
+    _anchorWallMs = DateTime.now().millisecondsSinceEpoch;
+    _anchorPosMs = pos;
 
     _persistOnTrack();
   }

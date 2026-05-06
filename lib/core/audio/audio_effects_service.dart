@@ -188,6 +188,38 @@ class AudioEffectsService {
     }
   }
 
+  /// Attach a LoudnessEnhancer to an arbitrary audio session id (e.g.
+  /// the metronome's click players) at the requested gain in millibel.
+  /// Keyed by session id on the platform so each click pitch can have
+  /// its own enhancer alongside the main song's Equalizer + BassBoost.
+  Future<bool> attachLoudnessToSession(
+    int sessionId, {
+    int gainMillibel = 1500,
+  }) async {
+    if (!Platform.isAndroid) return false;
+    if (sessionId == 0) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('attachLoudness', {
+        'sessionId': sessionId,
+        'gainMillibel': gainMillibel,
+      });
+      return ok ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  Future<void> detachLoudnessFromSession(int sessionId) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('detachLoudness', {
+        'sessionId': sessionId,
+      });
+    } on PlatformException {
+      // ignore
+    }
+  }
+
   Future<void> release() async {
     if (!Platform.isAndroid) return;
     try {

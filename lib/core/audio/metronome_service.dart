@@ -1,22 +1,31 @@
+import 'dart:async';
 import 'package:just_audio/just_audio.dart';
+import 'audio_effects_service.dart';
 
 /// Plays short click samples for the metronome.
 ///
-/// One pre-loaded player per pitch -- earlier versions layered multiple
-/// players to push perceived loudness higher, but the per-player play()
-/// jitter (~5-30 ms) became audible as a smeared "echo" attack. A single
-/// player with a heavily-clipped, harmonic-rich source produces the same
-/// peak amplitude (PCM int16 cap) without sync drift, and the source
-/// WAVs themselves carry the loudness now.
+/// One pre-loaded player per pitch. The system audio path on Android
+/// caps just_audio's setVolume at 1.0, so we attach a native
+/// LoudnessEnhancer (audiofx) to each click player's audio session for
+/// an extra ~+15 dB of headroom -- subjectively roughly 2x louder than
+/// uncompensated playback. Without this the click reaches int16 PCM
+/// peak at 100% on the slider but still sounds quiet next to a loud
+/// song.
 class MetronomeService {
   MetronomeService._internal();
   static final MetronomeService _instance = MetronomeService._internal();
   factory MetronomeService() => _instance;
 
+  static const int _loudnessGainMillibel = 3000;
+
   final AudioPlayer _highClick = AudioPlayer();
   final AudioPlayer _lowClick = AudioPlayer();
   bool _initialised = false;
   double _volume = 1.0;
+  int? _highSessionId;
+  int? _lowSessionId;
+  StreamSubscription<int?>? _highSessionSub;
+  StreamSubscription<int?>? _lowSessionSub;
 
   double get volume => _volume;
 
@@ -28,6 +37,28 @@ class MetronomeService {
     await _lowClick.seek(Duration.zero);
     await _highClick.setVolume(_volume);
     await _lowClick.setVolume(_volume);
+
+    // just_audio doesn't expose the audio session id until ExoPlayer has
+    // bound an AudioTrack, which only happens after the first play().
+    // Subscribe to the stream so the LoudnessEnhancer attaches as soon
+    // as a session id appears for each player.
+    _highSessionSub = _highClick.androidAudioSessionIdStream.listen((id) {
+      if (id != null && id != _highSessionId) {
+        _highSessionId = id;
+        // ignore: discarded_futures
+        AudioEffectsService().attachLoudnessToSession(id,
+            gainMillibel: _loudnessGainMillibel);
+      }
+    });
+    _lowSessionSub = _lowClick.androidAudioSessionIdStream.listen((id) {
+      if (id != null && id != _lowSessionId) {
+        _lowSessionId = id;
+        // ignore: discarded_futures
+        AudioEffectsService().attachLoudnessToSession(id,
+            gainMillibel: _loudnessGainMillibel);
+      }
+    });
+
     _initialised = true;
   }
 
@@ -55,6 +86,15 @@ class MetronomeService {
   }
 
   Future<void> dispose() async {
+    await _highSessionSub?.cancel();
+    await _lowSessionSub?.cancel();
+    final effects = AudioEffectsService();
+    if (_highSessionId != null) {
+      await effects.detachLoudnessFromSession(_highSessionId!);
+    }
+    if (_lowSessionId != null) {
+      await effects.detachLoudnessFromSession(_lowSessionId!);
+    }
     await _highClick.dispose();
     await _lowClick.dispose();
     _initialised = false;
