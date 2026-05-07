@@ -298,7 +298,14 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       }
 
       // Load new file (this will stop previous playback and reset player)
-      final duration = await _audioService.loadFile(fresh.filePath);
+      // Pass the track's display name as MediaItem metadata so the
+      // background-audio notification / lockscreen show "Song Title"
+      // instead of "/data/.../audio/uuid_song.mp3".
+      final duration = await _audioService.loadFile(
+        fresh.filePath,
+        id: fresh.id,
+        title: fresh.name,
+      );
       final markers = _storage.getMarkersForTrack(fresh.id);
 
       // Update last played (only for non-external tracks)
@@ -423,8 +430,14 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
         throw Exception('Audio file not found: $filePath');
       }
 
-      // Load file
-      final duration = await _audioService.loadFile(filePath);
+      // Load file with metadata so the background-audio notification /
+      // lockscreen UI shows the song title rather than the file path.
+      final duration = await _audioService.loadFile(
+        filePath,
+        id: tempTrack.id,
+        title: title,
+        artist: artist,
+      );
       final markers = _storage.getMarkersForTrack(tempTrack.id);
 
       // Device-audio tracks aren't persisted, so they don't carry their
@@ -663,7 +676,17 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
     state = state.copyWith(abLoop: newAbLoop);
   }
 
-  /// Toggle A-B loop
+  /// Toggle A-B loop.
+  ///
+  /// Implementation note: we used to call `setClip(start, end)` which
+  /// wraps the audio source in a ClippingAudioSource. That works for a
+  /// plain just_audio player, but ClippingAudioSource discards the
+  /// MediaItem tag of the wrapped source, which breaks
+  /// just_audio_background -- the MediaSession + foreground service
+  /// loses its handle on the track and the playback engine reports
+  /// nothing happened. Now we drive the loop entirely from
+  /// _checkAbLoop, which already snaps the playhead back to A whenever
+  /// position crosses B. No setClip / setLoopMode involved.
   Future<void> toggleAbLoop() async {
     final abLoop = state.abLoop;
     if (abLoop == null || !abLoop.isComplete) return;
@@ -672,26 +695,17 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
     final newAbLoop = abLoop.copyWith(isActive: newActive);
 
     if (newActive) {
-      // Use setClip for reliable looping within the A-B range
-      await _audioService.setClip(start: abLoop.pointA!, end: abLoop.pointB!);
-      await _audioService.setLoopMode(LoopMode.one);
-      // Seek to A if current position is outside the loop
+      // Move into the loop range so the user hears the loop immediately.
       if (state.position < abLoop.pointA! || state.position > abLoop.pointB!) {
         await _audioService.seek(abLoop.pointA!);
       }
-    } else {
-      // Clear clip and disable loop
-      await _audioService.clearClip();
-      await _audioService.setLoopMode(LoopMode.off);
     }
 
     state = state.copyWith(abLoop: newAbLoop);
   }
 
-  /// Clear A-B loop
+  /// Clear A-B loop -- just drop the state, no engine-level cleanup.
   Future<void> clearAbLoop() async {
-    await _audioService.clearClip();
-    await _audioService.setLoopMode(LoopMode.off);
     state = state.copyWith(clearAbLoop: true);
   }
 

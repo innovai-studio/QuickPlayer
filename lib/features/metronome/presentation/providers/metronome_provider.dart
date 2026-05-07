@@ -369,16 +369,19 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     // either don't have an anchor yet or the actual position has drifted
     // far from the prediction (seek, A-B loop wrap, big lag).
     int effectivePosMs;
+    bool reanchored = false;
     if (_anchorWallMs == null || _anchorPosMs == null) {
       _anchorWallMs = wallNowMs;
       _anchorPosMs = actualPosMs;
       effectivePosMs = actualPosMs;
+      reanchored = true;
     } else {
       final predictedPos = _anchorPosMs! + (wallNowMs - _anchorWallMs!);
       if ((predictedPos - actualPosMs).abs() > _resyncThresholdMs) {
         _anchorWallMs = wallNowMs;
         _anchorPosMs = actualPosMs;
         effectivePosMs = actualPosMs;
+        reanchored = true;
       } else {
         effectivePosMs = predictedPos;
       }
@@ -387,6 +390,15 @@ class MetronomeNotifier extends StateNotifier<MetronomeState> {
     final intervalMs = state.beatIntervalMs;
     final relMs = effectivePosMs - state.phaseOffsetMs;
     if (relMs < 0) return;
+
+    // After a re-anchor (A-B loop wrap, seek, scrub) the player position
+    // can have moved backwards, so _lastClickedBeatNumber may now sit
+    // ABOVE the current beat slot and stop the click forever. Snap it
+    // to the slot the new position is in so the next genuine boundary
+    // fires as expected.
+    if (reanchored) {
+      _lastClickedBeatNumber = (relMs / intervalMs).floor() - 1;
+    }
 
     final beatNumber = (relMs / intervalMs).floor();
     if (beatNumber <= _lastClickedBeatNumber) return;

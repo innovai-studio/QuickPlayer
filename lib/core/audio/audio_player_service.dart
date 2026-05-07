@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:audio_session/audio_session.dart';
 import 'audio_effects_service.dart';
 import 'spectrum_service.dart';
@@ -64,17 +65,46 @@ class AudioPlayerService {
     return _spectrum.start(id);
   }
 
-  /// Load audio from file path
-  Future<Duration?> loadFile(String filePath) async {
+  /// Load audio from file path with optional metadata for the system
+  /// notification / lockscreen UI. Without metadata the controls show
+  /// the file path which looks awful, so callers should pass the
+  /// track's display name + artist when available.
+  Future<Duration?> loadFile(
+    String filePath, {
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+  }) async {
     try {
-      // Stop current playback and reset player state before loading new file
       await _player.stop();
 
-      final duration = await _player.setFilePath(filePath);
+      // The MediaItem tag is what just_audio_background reads to
+      // populate the foreground notification + lockscreen + Bluetooth
+      // metadata. id must be unique per track so MediaSession can
+      // distinguish them when stepping through a queue.
+      final source = AudioSource.uri(
+        Uri.file(filePath),
+        tag: MediaItem(
+          id: id ?? filePath,
+          title: title ?? _filenameOf(filePath),
+          artist: artist,
+          album: album,
+        ),
+      );
+      final duration = await _player.setAudioSource(source);
       return duration;
     } catch (e) {
       rethrow;
     }
+  }
+
+  String _filenameOf(String path) {
+    final slash = path.lastIndexOf('/');
+    final raw = slash < 0 ? path : path.substring(slash + 1);
+    // Drop extension for prettier display.
+    final dot = raw.lastIndexOf('.');
+    return dot <= 0 ? raw : raw.substring(0, dot);
   }
 
   /// Play

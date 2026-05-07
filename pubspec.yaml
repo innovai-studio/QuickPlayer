@@ -1,7 +1,7 @@
 name: quickplayer
 description: "Music practice assistant with speed/pitch control and A-B loop"
 publish_to: 'none'
-version: 1.2.0+14
+version: 1.3.0+15
 
 environment:
   sdk: ^3.6.1
@@ -20,11 +20,21 @@ dependencies:
   go_router: ^14.6.2
 
   # Audio. just_audio_media_kit + media_kit_libs_linux were a Linux
-  # desktop fallback, but they drag a 4 KB-aligned libsqlite3.so into
-  # the Android APK that fails Play Store's 16 KB page-size check.
-  # Removing them keeps the mobile build clean -- just_audio handles
-  # Android natively.
+  # desktop fallback that dragged a 4 KB-aligned libsqlite3.so into
+  # the Android APK and failed Play Store's 16 KB page-size check, so
+  # they were dropped in v1.2.0. just_audio_background bridges to
+  # Android's MediaSession + foreground service so playback survives
+  # backgrounding and shows lockscreen / notification / BT-headset
+  # controls -- audio formerly stopped whenever Android killed the
+  # backgrounded process.
   just_audio: ^0.9.42
+  just_audio_background: ^0.0.1-beta.13
+  # The metronome click is rendered via a custom MethodChannel onto
+  # Android's SoundPool (see lib/core/audio/metronome_service.dart +
+  # android/.../SoundPoolHandler.kt). just_audio + audioplayers both
+  # fought the audio focus model once just_audio_background hooked the
+  # platform plugin -- SoundPool is the canonical Android API for
+  # short, non-focus-requesting SFX that mixes into the music stream.
   audio_session: ^0.1.21
   audio_waveforms: ^1.2.0
 
