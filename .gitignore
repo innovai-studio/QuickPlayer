@@ -55,3 +55,6 @@ android/app/keystore/
 release-v*/
 *.aab
 *.apk
+
+# Local research / competitor analysis PDFs etc.
+Ref/

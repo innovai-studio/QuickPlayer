@@ -16,36 +16,13 @@ class MetronomeControl extends ConsumerWidget {
     final state = ref.watch(metronomeProvider);
     final notifier = ref.read(metronomeProvider.notifier);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: title + on/off
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Metronome',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Switch(
-                value: state.enabled,
-                onChanged: (_) => notifier.toggle(),
-                activeColor: AppColors.primaryStart,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
+    // Outer Container + title row + on/off Switch live in the
+    // CollapsibleSurface wrapper. The Switch is exposed via the
+    // wrapper's headerTrailing so the user can toggle the metronome
+    // without expanding the section.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // BPM + beat dots
           Row(
             children: [
@@ -175,7 +152,6 @@ class MetronomeControl extends ConsumerWidget {
             ),
           ],
         ],
-      ),
     );
   }
 }

@@ -14,38 +14,11 @@ class PitchControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Pitch',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                _formatPitch(pitchSemitones),
-                style: const TextStyle(
-                  color: AppColors.primaryStart,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
+    // Outer Container + title row are now provided by the
+    // CollapsibleSurface wrapper at the player_screen level.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // Slider
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
@@ -79,7 +52,6 @@ class PitchControl extends StatelessWidget {
             ],
           ),
         ],
-      ),
     );
   }
 
@@ -112,8 +84,4 @@ class PitchControl extends StatelessWidget {
     );
   }
 
-  String _formatPitch(int semitones) {
-    if (semitones == 0) return '0';
-    return semitones > 0 ? '+$semitones' : '$semitones';
-  }
 }

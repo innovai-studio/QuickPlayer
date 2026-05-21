@@ -4,6 +4,13 @@
     <!-- Android 13+ fine-grained media permissions (audio only) -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
+    <!-- Required by just_audio_background's foreground service so the
+         OS keeps the audio playing when the app is backgrounded /
+         locked. mediaPlayback is the audio-specific service type. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
     <!-- Required by android.media.audiofx.Visualizer (output-mix tap)
          on API 28+. We only use it to read this app's own playback for
          the real-time spectrum analyser; we never record from the mic. -->
@@ -50,6 +57,29 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- just_audio_background: foreground service that keeps audio
+             alive when the app is backgrounded, plus the receiver that
+             handles MediaSession events from BT headsets / lockscreen
+             controls / notification taps. -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService"/>
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

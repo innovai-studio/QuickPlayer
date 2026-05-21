@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../../shared/extensions/duration_extension.dart';
+import '../../../../shared/widgets/collapsible_surface.dart';
 import '../../../library/data/models/track.dart';
 import '../../../library/presentation/providers/library_provider.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -19,6 +20,7 @@ import '../widgets/focus_mode_control.dart';
 import '../widgets/marker_list.dart';
 import '../widgets/waveform_view.dart';
 import '../../../metronome/presentation/widgets/metronome_control.dart';
+import '../../../metronome/presentation/providers/metronome_provider.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String trackId;
@@ -154,90 +156,307 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Speed control
-                      SpeedControl(
-                        speed: playerState.speed,
-                        originalBpm: track?.bpm,
-                        onSpeedChanged: (speed) =>
-                            ref.read(playerProvider.notifier).setSpeed(speed),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Pitch control
-                      PitchControl(
-                        pitchSemitones: playerState.pitchSemitones,
-                        onPitchChanged: (semitones) => ref
-                            .read(playerProvider.notifier)
-                            .setPitchSemitones(semitones),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Focus EQ (hidden on devices without AudioEffect)
-                      FocusModeControl(
-                        preset: playerState.focusMode,
-                        available: playerState.focusAvailable,
-                        capabilities: AudioEffectsService().capabilities,
-                        bandLevelsMillibel: playerState.bandLevelsMillibel,
-                        bassStrengthMilli: playerState.bassStrengthMilli,
-                        spectrumEnabled: playerState.spectrumEnabled,
-                        onPresetChanged: (preset) => ref
-                            .read(playerProvider.notifier)
-                            .setFocusMode(preset),
-                        onBandChanged: (i, mb) => ref
-                            .read(playerProvider.notifier)
-                            .setBandLevel(i, mb),
-                        onBassChanged: (m) => ref
-                            .read(playerProvider.notifier)
-                            .setBassStrength(m),
-                        onSpectrumToggle: (enable) async {
-                          final ok = await ref
-                              .read(playerProvider.notifier)
-                              .setSpectrumEnabled(enable);
-                          if (enable && !ok && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Microphone permission required for live spectrum'),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                      if (playerState.focusAvailable)
-                        const SizedBox(height: 16),
-
-                      // Metronome
-                      const MetronomeControl(),
-                      const SizedBox(height: 16),
-
-                      // A-B Loop control
-                      ABLoopControl(
-                        abLoop: playerState.abLoop,
-                        currentPosition: playerState.position,
-                        duration: playerState.duration,
-                        onSetA: () => ref.read(playerProvider.notifier).setPointA(),
-                        onSetB: () => ref.read(playerProvider.notifier).setPointB(),
-                        onToggle: () =>
-                            ref.read(playerProvider.notifier).toggleAbLoop(),
-                        onClear: () =>
-                            ref.read(playerProvider.notifier).clearAbLoop(),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Markers
-                      MarkerListWidget(
-                        markers: playerState.markers,
-                        onMarkerTap: (marker) =>
-                            ref.read(playerProvider.notifier).jumpToMarker(marker),
-                        onAddMarker: () => _showAddMarkerDialog(),
-                        onDeleteMarker: (markerId) =>
-                            ref.read(playerProvider.notifier).deleteMarker(markerId),
-                      ),
+                      // Each control is wrapped in a CollapsibleSurface so
+                      // the user can hide panels they aren't actively
+                      // touching (avoids mis-taps and keeps the screen
+                      // tidy). Expand/collapse state persists per panel
+                      // through the persistKey.
+                      _speedSection(playerState, track),
+                      const SizedBox(height: 12),
+                      _pitchSection(playerState),
+                      const SizedBox(height: 12),
+                      if (playerState.focusAvailable) ...[
+                        _focusSection(playerState),
+                        const SizedBox(height: 12),
+                      ],
+                      _metronomeSection(),
+                      const SizedBox(height: 12),
+                      _abLoopSection(playerState),
+                      const SizedBox(height: 12),
+                      _markerSection(playerState),
                     ],
                   ),
                 ),
     );
   }
+
+  // ---- Collapsible control sections --------------------------------
+
+  Widget _speedSection(AppPlayerState playerState, Track? track) {
+    final speedPercent = (playerState.speed * 100).round();
+    final effectiveBpm =
+        track?.bpm != null ? (track!.bpm! * playerState.speed).round() : null;
+    return CollapsibleSurface(
+      persistKey: 'speed',
+      title: const Text(
+        'Speed',
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$speedPercent%',
+            style: const TextStyle(
+              color: AppColors.primaryStart,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (effectiveBpm != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              '($effectiveBpm BPM)',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ],
+      ),
+      body: SpeedControl(
+        speed: playerState.speed,
+        originalBpm: track?.bpm,
+        onSpeedChanged: (speed) =>
+            ref.read(playerProvider.notifier).setSpeed(speed),
+      ),
+    );
+  }
+
+  Widget _pitchSection(AppPlayerState playerState) {
+    final p = playerState.pitchSemitones;
+    final label = p == 0 ? '0' : (p > 0 ? '+$p' : '$p');
+    return CollapsibleSurface(
+      persistKey: 'pitch',
+      title: const Text(
+        'Pitch',
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.primaryStart,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      body: PitchControl(
+        pitchSemitones: playerState.pitchSemitones,
+        onPitchChanged: (semitones) =>
+            ref.read(playerProvider.notifier).setPitchSemitones(semitones),
+      ),
+    );
+  }
+
+  Widget _focusSection(AppPlayerState playerState) {
+    return CollapsibleSurface(
+      persistKey: 'focus',
+      title: const Text(
+        'Focus',
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            playerState.focusMode == EqPreset.flat
+                ? 'Off'
+                : playerState.focusMode.label,
+            style: TextStyle(
+              color: playerState.focusMode == EqPreset.flat
+                  ? AppColors.textSecondary
+                  : AppColors.primaryStart,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () async {
+              final enable = !playerState.spectrumEnabled;
+              final ok = await ref
+                  .read(playerProvider.notifier)
+                  .setSpectrumEnabled(enable);
+              if (enable && !ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                        'Microphone permission required for live spectrum'),
+                  ),
+                );
+              }
+            },
+            child: Icon(
+              Icons.graphic_eq,
+              size: 18,
+              color: playerState.spectrumEnabled
+                  ? AppColors.accent
+                  : AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      body: FocusModeControl(
+        preset: playerState.focusMode,
+        available: playerState.focusAvailable,
+        capabilities: AudioEffectsService().capabilities,
+        bandLevelsMillibel: playerState.bandLevelsMillibel,
+        bassStrengthMilli: playerState.bassStrengthMilli,
+        spectrumEnabled: playerState.spectrumEnabled,
+        onPresetChanged: (preset) =>
+            ref.read(playerProvider.notifier).setFocusMode(preset),
+        onBandChanged: (i, mb) =>
+            ref.read(playerProvider.notifier).setBandLevel(i, mb),
+        onBassChanged: (m) =>
+            ref.read(playerProvider.notifier).setBassStrength(m),
+        onSpectrumToggle: (enable) async {
+          await ref.read(playerProvider.notifier).setSpectrumEnabled(enable);
+        },
+      ),
+    );
+  }
+
+  Widget _metronomeSection() {
+    final state = ref.watch(metronomeProvider);
+    final notifier = ref.read(metronomeProvider.notifier);
+    return CollapsibleSurface(
+      persistKey: 'metronome',
+      title: const Text(
+        'Metronome',
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${state.bpm.round()} ${state.timeSignature.label}',
+            style: TextStyle(
+              color: state.enabled
+                  ? AppColors.primaryStart
+                  : AppColors.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Switch(
+            value: state.enabled,
+            onChanged: (_) => notifier.toggle(),
+            activeColor: AppColors.primaryStart,
+          ),
+        ],
+      ),
+      body: const MetronomeControl(),
+    );
+  }
+
+  Widget _abLoopSection(AppPlayerState playerState) {
+    final isActive = playerState.abLoop?.isActive ?? false;
+    return CollapsibleSurface(
+      persistKey: 'abloop',
+      title: const Text(
+        'A-B Loop',
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: isActive
+          ? Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'ACTIVE',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : null,
+      body: ABLoopControl(
+        abLoop: playerState.abLoop,
+        currentPosition: playerState.position,
+        duration: playerState.duration,
+        onSetA: () => ref.read(playerProvider.notifier).setPointA(),
+        onSetB: () => ref.read(playerProvider.notifier).setPointB(),
+        onToggle: () => ref.read(playerProvider.notifier).toggleAbLoop(),
+        onClear: () => ref.read(playerProvider.notifier).clearAbLoop(),
+      ),
+    );
+  }
+
+  Widget _markerSection(AppPlayerState playerState) {
+    return CollapsibleSurface(
+      persistKey: 'markers',
+      title: Text(
+        'Markers (${playerState.markers.length})',
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      headerTrailing: GestureDetector(
+        onTap: _showAddMarkerDialog,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.primaryStart.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 14, color: AppColors.primaryStart),
+              SizedBox(width: 4),
+              Text(
+                'Add',
+                style: TextStyle(
+                  color: AppColors.primaryStart,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: MarkerListWidget(
+        markers: playerState.markers,
+        onMarkerTap: (marker) =>
+            ref.read(playerProvider.notifier).jumpToMarker(marker),
+        onAddMarker: _showAddMarkerDialog,
+        onDeleteMarker: (markerId) =>
+            ref.read(playerProvider.notifier).deleteMarker(markerId),
+      ),
+    );
+  }
+
+  // ---- Other helpers (unchanged) ----------------------------------
 
   Widget _buildProgressBar(AppPlayerState playerState) {
     final Duration position = playerState.position;

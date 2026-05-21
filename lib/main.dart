@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'core/constants/app_colors.dart';
 import 'core/storage/storage_service.dart';
 import 'routing/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Bridges just_audio playback to Android's MediaSession + foreground
+  // service. Must run before any AudioPlayer is constructed -- once
+  // initialised, every AudioPlayer with a MediaItem-tagged source
+  // automatically gets lockscreen / notification / BT-headset controls
+  // and survives backgrounding without Android killing it.
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.quickplayer.quickplayer.channel.audio',
+    androidNotificationChannelName: 'Music playback',
+    androidNotificationOngoing: true,
+    androidStopForegroundOnPause: true,
+  );
 
   // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(

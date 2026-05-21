@@ -22,52 +22,12 @@ class SpeedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Speed',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Row(
-                children: [
-                  Text(
-                    '$speedPercent%',
-                    style: const TextStyle(
-                      color: AppColors.primaryStart,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (effectiveBpm != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '(${effectiveBpm} BPM)',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
+    // The outer Container + title row that used to live here have moved
+    // up to the CollapsibleSurface wrapper at the player_screen level so
+    // the user can collapse this panel to avoid mis-tapping it.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // +/- control with slider
           Row(
             children: [
@@ -157,7 +117,6 @@ class SpeedControl extends StatelessWidget {
             }).toList(),
           ),
         ],
-      ),
     );
   }
 

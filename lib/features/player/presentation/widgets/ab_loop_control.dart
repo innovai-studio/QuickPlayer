@@ -30,50 +30,13 @@ class ABLoopControl extends StatelessWidget {
     final isActive = abLoop?.isActive ?? false;
     final isComplete = abLoop?.isComplete ?? false;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-        border: isActive
-            ? Border.all(color: AppColors.accent, width: 2)
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'A-B Loop',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (isActive)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'ACTIVE',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
+    // Outer Container + title row + ACTIVE badge are handled by the
+    // CollapsibleSurface wrapper at the player_screen level. The
+    // wrapper passes the ACTIVE badge as headerTrailing so the
+    // collapsed state still surfaces whether the loop is engaged.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // A-B buttons row
           Row(
             children: [
@@ -164,7 +127,6 @@ class ABLoopControl extends StatelessWidget {
             ],
           ),
         ],
-      ),
     );
   }
 
