@@ -19,60 +19,13 @@ class MarkerListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Markers (${markers.length})',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              GestureDetector(
-                onTap: onAddMarker,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryStart.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.add,
-                        size: 16,
-                        color: AppColors.primaryStart,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Add',
-                        style: TextStyle(
-                          color: AppColors.primaryStart,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
+    // Outer Container + title row + Add button now live in the
+    // CollapsibleSurface wrapper at the player_screen level. The Add
+    // button is exposed via the wrapper's headerTrailing so users can
+    // add a marker without expanding the section.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           if (markers.isEmpty)
             const Center(
               child: Padding(
@@ -90,7 +43,6 @@ class MarkerListWidget extends StatelessWidget {
           else
             ...markers.map((marker) => _buildMarkerItem(marker)),
         ],
-      ),
     );
   }
 

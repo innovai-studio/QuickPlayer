@@ -39,54 +39,13 @@ class FocusModeControl extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!available) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Focus',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Row(
-                children: [
-                  Text(
-                    preset == EqPreset.flat ? 'Off' : preset.label,
-                    style: TextStyle(
-                      color: preset == EqPreset.flat
-                          ? AppColors.textSecondary
-                          : AppColors.primaryStart,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () => onSpectrumToggle(!spectrumEnabled),
-                    child: Icon(
-                      Icons.graphic_eq,
-                      size: 18,
-                      color: spectrumEnabled
-                          ? AppColors.accent
-                          : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+    // Outer Container + title row + status indicators (preset label,
+    // spectrum toggle icon) live in the CollapsibleSurface wrapper at
+    // the player_screen level. We render only the body here: preset
+    // chip row + EQ visualiser + sliders.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -114,7 +73,6 @@ class FocusModeControl extends StatelessWidget {
             onEnableSpectrum: () => onSpectrumToggle(true),
           ),
         ],
-      ),
     );
   }
 }
