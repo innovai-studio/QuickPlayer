@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../features/library/data/models/track.dart';
 import '../../features/player/data/models/marker.dart';
 import '../../features/playlist/data/models/playlist.dart';
+import '../../features/practice/data/models/practice_session.dart';
 import '../constants/app_constants.dart';
 
 class StorageService {
@@ -14,6 +15,7 @@ class StorageService {
   late Box<Marker> _markersBox;
   late Box<dynamic> _settingsBox;
   late Box<Playlist> _playlistsBox;
+  late Box<PracticeSession> _practiceBox;
 
   bool _isInitialized = false;
 
@@ -27,14 +29,38 @@ class StorageService {
     Hive.registerAdapter(TrackAdapter());
     Hive.registerAdapter(MarkerAdapter());
     Hive.registerAdapter(PlaylistAdapter());
+    Hive.registerAdapter(PracticeSessionAdapter());
 
     // Open boxes
     _tracksBox = await Hive.openBox<Track>(AppConstants.tracksBox);
     _markersBox = await Hive.openBox<Marker>(AppConstants.markersBox);
     _settingsBox = await Hive.openBox(AppConstants.settingsBox);
     _playlistsBox = await Hive.openBox<Playlist>(AppConstants.playlistsBox);
+    _practiceBox = await Hive.openBox<PracticeSession>(
+        AppConstants.practiceSessionsBox);
 
     _isInitialized = true;
+  }
+
+  // Practice session operations
+  List<PracticeSession> getAllPracticeSessions() {
+    return _practiceBox.values.toList()
+      ..sort((a, b) => b.startedAtMs.compareTo(a.startedAtMs));
+  }
+
+  Future<void> savePracticeSession(PracticeSession session) async {
+    await _practiceBox.put(session.id, session);
+  }
+
+  Future<void> deletePracticeSessionsBefore(DateTime cutoff) async {
+    final cutoffMs = cutoff.toUtc().millisecondsSinceEpoch;
+    final toDelete = _practiceBox.values
+        .where((s) => s.startedAtMs < cutoffMs)
+        .map((s) => s.id)
+        .toList();
+    for (final id in toDelete) {
+      await _practiceBox.delete(id);
+    }
   }
 
   // Track operations

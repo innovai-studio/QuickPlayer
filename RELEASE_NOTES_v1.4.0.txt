@@ -1,0 +1,41 @@
+<zh-TW>
+QuickPlayer v1.4.0 更新！
+
+新功能：
+• 練習模式 - 全新的 Practice 分頁。自動記錄你每首歌的練習時間,呈現「今日練習分鐘數」、連續練習天數(streak)、近 7 天長條圖,以及最近練習紀錄
+• 練習紀錄聚合 - 同一首歌、同一天的多次播放自動合併成一筆,顯示累計時間;「Load more」每次多載入 10 筆,最多 100 筆
+• 真實波形 - 波形改用實際音訊峰值繪製(不再是裝飾用的假波形),可直接點波形跳轉播放位置;分析時顯示載入動畫,分析過的歌曲會快取波形,再次開啟瞬間顯示
+
+優化：
+• 重寫波形解析引擎 - 改用原生 Android 解碼器,修正了「第一首之後波形卡住無法顯示」的問題
+• 練習時間在背景播放也會持續累計,每 15 秒自動存檔,App 被系統清掉也不會遺失
+
+延續功能：
+• Focus EQ 五段預設 + 客製 EQ + 即時頻譜分析
+• 背景播放 + 鎖螢幕 / 通知列 / 藍牙耳機控制
+• Tap-to-sync 節拍器 + 多拍號(2/4 / 3/4 / 4/4 / 6/8 / 12/8)
+• 速度 0.25x-2.0x、音調 ±12 半音
+• A-B 段落循環、練習標記
+• 自動 BPM / Key 分析
+</zh-TW>
+
+<en-US>
+QuickPlayer v1.4.0 Update!
+
+New:
+• Practice Mode — a new Practice tab. Automatically logs your practice time per track and shows today's minutes, your day streak, a 7-day bar chart, and recent sessions
+• Aggregated sessions — multiple plays of the same song on the same day merge into one entry with the total time; "Load more" reveals 10 more at a time, up to 100
+• Real waveform — the waveform is now drawn from actual audio peaks (no more decorative fake wave); tap it to seek. A loading animation shows during analysis, and analysed songs cache their waveform so they appear instantly next time
+
+Improvements:
+• Rewritten waveform engine — switched to a native Android decoder, fixing the bug where the waveform got stuck and wouldn't render after the first song
+• Practice time keeps accumulating during background playback and auto-saves every 15s, so it survives the app being killed
+
+Continuing:
+• Focus EQ with 5 presets + custom EQ + live spectrum analyser
+• Background playback with lockscreen / notification / Bluetooth headset controls
+• Tap-to-sync metronome with multi time signatures (2/4 / 3/4 / 4/4 / 6/8 / 12/8)
+• Speed 0.25x–2.0x, pitch ±12 semitones
+• A-B loop and practice markers
+• Automatic BPM / Key analysis
+</en-US>

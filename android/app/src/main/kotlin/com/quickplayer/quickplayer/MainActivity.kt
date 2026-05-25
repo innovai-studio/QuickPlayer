@@ -26,10 +26,12 @@ class MainActivity: AudioServiceActivity() {
     private val SPECTRUM_METHOD_CHANNEL = "com.quickplayer/spectrum/control"
     private val SPECTRUM_EVENT_CHANNEL = "com.quickplayer/spectrum/stream"
     private val SOUNDPOOL_CHANNEL = "com.quickplayer/sound_pool"
+    private val WAVEFORM_CHANNEL = "com.quickplayer/waveform_peaks"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val effectsHandler = AudioEffectsHandler()
     private val spectrumHandler = SpectrumHandler()
     private val soundPoolHandler by lazy { SoundPoolHandler(applicationContext) }
+    private val waveformHandler = WaveformPeaksHandler()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -44,6 +46,9 @@ class MainActivity: AudioServiceActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SOUNDPOOL_CHANNEL)
             .setMethodCallHandler(soundPoolHandler)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WAVEFORM_CHANNEL)
+            .setMethodCallHandler(waveformHandler)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -392,5 +397,6 @@ class MainActivity: AudioServiceActivity() {
         effectsHandler.release()
         spectrumHandler.release()
         soundPoolHandler.release()
+        waveformHandler.release()
     }
 }

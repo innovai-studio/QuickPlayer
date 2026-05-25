@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/widgets/mini_player_bar.dart';
 import '../../../library/presentation/screens/library_screen.dart';
 import '../../../playlist/presentation/screens/playlists_screen.dart';
+import '../../../practice/presentation/screens/practice_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +20,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _screens = const [
     LibraryTab(),
     PlaylistsTab(),
+    PracticeScreen(),
   ];
 
   @override
@@ -60,6 +62,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               BottomNavigationBarItem(
                 icon: Icon(Icons.playlist_play),
                 label: 'Playlists',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.trending_up),
+                label: 'Practice',
               ),
             ],
           ),

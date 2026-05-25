@@ -32,13 +32,14 @@ class TrackAdapter extends TypeAdapter<Track> {
       customBandLevels: (fields[12] as List?)?.cast<int>(),
       customBassStrength: fields[13] as int?,
       metronomePhaseOffsetMs: fields[14] as int?,
+      waveformPeaks: (fields[15] as List?)?.cast<double>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, Track obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -68,7 +69,9 @@ class TrackAdapter extends TypeAdapter<Track> {
       ..writeByte(13)
       ..write(obj.customBassStrength)
       ..writeByte(14)
-      ..write(obj.metronomePhaseOffsetMs);
+      ..write(obj.metronomePhaseOffsetMs)
+      ..writeByte(15)
+      ..write(obj.waveformPeaks);
   }
 
   @override

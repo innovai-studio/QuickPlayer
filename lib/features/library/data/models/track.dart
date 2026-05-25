@@ -59,6 +59,14 @@ class Track extends HiveObject {
   @HiveField(14)
   int? metronomePhaseOffsetMs;
 
+  /// Downsampled peak amplitudes extracted from the audio file (0..1).
+  /// 100 samples is enough for the visualiser and stays a few KB per
+  /// track. Null until the first time we run extraction; the WaveformView
+  /// kicks off extraction on demand and persists the result here so
+  /// subsequent opens skip the cost.
+  @HiveField(15)
+  List<double>? waveformPeaks;
+
   Track({
     required this.id,
     required this.name,
@@ -75,6 +83,7 @@ class Track extends HiveObject {
     this.customBandLevels,
     this.customBassStrength,
     this.metronomePhaseOffsetMs,
+    this.waveformPeaks,
   });
 
   Duration get duration => Duration(milliseconds: durationMs);
@@ -95,9 +104,11 @@ class Track extends HiveObject {
     List<int>? customBandLevels,
     int? customBassStrength,
     int? metronomePhaseOffsetMs,
+    List<double>? waveformPeaks,
     bool clearFocusPreset = false,
     bool clearCustomEq = false,
     bool clearMetronome = false,
+    bool clearWaveform = false,
   }) {
     return Track(
       id: id ?? this.id,
@@ -122,6 +133,9 @@ class Track extends HiveObject {
       metronomePhaseOffsetMs: clearMetronome
           ? null
           : (metronomePhaseOffsetMs ?? this.metronomePhaseOffsetMs),
+      waveformPeaks: clearWaveform
+          ? null
+          : (waveformPeaks ?? this.waveformPeaks),
     );
   }
 
