@@ -58,3 +58,6 @@ release-v*/
 
 # Local research / competitor analysis PDFs etc.
 Ref/
+
+# Stem-separation spike venv (large, regenerable)
+stem_spike/
