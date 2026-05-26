@@ -61,3 +61,7 @@ Ref/
 
 # Stem-separation spike venv (large, regenerable)
 stem_spike/
+
+# Stem ONNX spike: generated models + pycache (regenerable, large)
+tools/stem_onnx/*.onnx
+tools/stem_onnx/__pycache__/

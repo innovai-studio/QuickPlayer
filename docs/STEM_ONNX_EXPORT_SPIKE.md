@@ -78,11 +78,61 @@ accelerator (NNAPI/GPU-delegate/NPU), which is a separate, harder spike.
 int8 (next) may shave ~2× and ~4× the size; the open question is the
 SDR hit, which needs the working ONNX to measure.
 
-## Recommendation
+## UPDATE — complex-free fork DONE, ONNX runs on ORT
 
-The on-device path is **feasible and de-risked** — no fundamental
-blocker, just a bounded fork. Decision for the user: invest the ~half
-day to produce the complex-free ONNX now (unlocks real ORT + int8
-numbers and an actual mobile-shippable artifact), or park it here with
-the path documented and move on. Quality and desktop perf are already
-validated; this last step is about the *mobile runtime* artifact.
+Built the complex-free fork (`tools/stem_onnx/complex_free.py` +
+`export_onnx.py`). Final blockers hit and fixed during the export:
+
+| Blocker | Fix |
+|---------|-----|
+| reflect-mode `Pad` fails legacy symbolic after reshape | manual reflect pad via flip+concat (`reflect_pad1d`) |
+| `F.fold` → `col2im` symbolic broken in opset-18 exporter | overlap-add as sum of R=4 shifted hop-blocks (n_fft=4·hop) |
+| `Tensor.unfold` → Slice/Concat soup breaks ORT shape inference | frame via block-reshape + R shifted concats |
+
+Results (single htdemucs, 6:10 song, this i7 CPU):
+
+| Variant | Size | ORT vs PyTorch | per-7.8 s seg | full-song est | verdict |
+|---------|------|----------------|---------------|---------------|---------|
+| **fp32 ONNX** | 241 MB | **5.9e-4** | 3.36 s | **159 s** | ✅ works; *faster* than PyTorch eager (238 s) |
+| int8 dynamic | 126 MB | rel 1.73 (garbage) | 6.88 s | 326 s | ❌ slower **and** broken |
+| fp16 | 121 MB | n/a | — | — | converts but a Cast node needs fixup to load; CPU won't accelerate fp16 anyway |
+
+Eager patched-vs-stock parity: **4.08e-4** (well under the 1e-3 target).
+
+### Key conclusions
+
+- **The ONNX export is real and correct** — ORT output is numerically
+  identical to the PyTorch stems the user already approved (5.9e-4).
+- **fp32 ORT is fast on desktop CPU (159 s, ~0.43× realtime)** — even
+  beats PyTorch eager. ARM extrapolation (~2–4×) → **~5–11 min** for a
+  6 min song, single-threaded-ish mid-range; less on flagships.
+- **Naive int8 is OUT.** Dynamic quantization both slowed it down and
+  destroyed the output on this architecture (the hybrid STFT/transformer
+  graph doesn't tolerate blind dynamic quant). Earlier "~20 MB int8"
+  estimate was too optimistic. A real attempt would need *static,
+  per-channel* quant with calibration data and per-op exclusions — and
+  even then quality is at risk. Treat as a separate research task, not a
+  given.
+- **Realistic mobile bundle = 120 MB (fp16) – 241 MB (fp32)**, shipped
+  as a post-install download, not bundled in the APK.
+
+## Recommendation (updated)
+
+On-device stem separation is **feasible and now proven end-to-end**:
+patched htdemucs exports to ONNX, runs on ONNX Runtime, and matches the
+approved quality. The v2.0 build path:
+
+1. Ship the **fp32 (or fixed fp16) ONNX**, ~120–240 MB **downloaded on
+   first use** (not in the APK).
+2. Run it via **onnxruntime-android**, chunked into 7.8 s segments with
+   overlap, in a **foreground service** with a real progress bar and a
+   **permanent per-track stem cache** (store stems as Opus/AAC ~10–15 MB,
+   not WAV).
+3. Expect **~5–11 min/song on mid-range CPU**; add an **NNAPI/GPU
+   execution provider** as a fast-follow for flagships (CPU fallback).
+4. **Don't** rely on int8 for the size win; if size matters, fix the
+   fp16 Cast issue (block-list the STFT Cast ops during conversion).
+
+Remaining unknowns for the actual v2.0 (not blockers): onnxruntime-
+android integration + EP selection on real devices; the fp16 Cast
+fixup; whether static-quant can recover size without quality loss.
