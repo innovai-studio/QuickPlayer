@@ -98,4 +98,10 @@ flutter {
 dependencies {
     // Kotlin coroutines for async audio analysis
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // ONNX Runtime for on-device stem separation (htdemucs). The full
+    // -android package (not -mobile) bundles the NNAPI execution
+    // provider and ships XNNPACK-backed CPU kernels, which we need to
+    // hit the <5 min/song target -- see docs/STEM_ONNX_EXPORT_SPIKE.md.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
 }

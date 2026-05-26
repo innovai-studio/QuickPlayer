@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/stem/stem_separator.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -169,6 +171,27 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
+          // Debug-only: on-device stem-separation benchmark (P1). Stripped
+          // from release builds. Requires the model + segment pushed to
+          // /data/local/tmp (see docs/STEM_ONNX_EXPORT_SPIKE.md).
+          if (kDebugMode) ...[
+            _buildSectionHeader('Debug — Stem Separation'),
+            _buildCard(
+              children: [
+                Center(
+                  child: TextButton(
+                    onPressed: () => _runStemBenchmark(context),
+                    child: const Text(
+                      'Run stem benchmark (CPU/XNNPACK/NNAPI)',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+
           // Reset Button
           Center(
             child: TextButton(
@@ -178,6 +201,51 @@ class SettingsScreen extends ConsumerWidget {
                 style: TextStyle(color: AppColors.error),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runStemBenchmark(BuildContext context) async {
+    // 2 s segment model (~1.4 GB peak) to fit 4 GB devices; weights mmap'd.
+    const model = '/data/local/tmp/htdemucs_2s.onnx';
+    const seg = '/data/local/tmp/mers_seg2s.raw';
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Running stem benchmark… (see logcat)')),
+    );
+    final lines = <String>[];
+    for (final provider in ['cpu', 'xnnpack', 'nnapi']) {
+      final r = await StemSeparator.instance.benchmark(
+        modelPath: model,
+        provider: provider,
+        threads: 4,
+        inputRawPath: seg,
+      );
+      // Surfaced via debugPrint so it lands in logcat for capture.
+      debugPrint('STEMBENCH[$provider] $r');
+      if (r != null && r['ok'] == true) {
+        lines.add('$provider: ${r['inferMs']}ms/seg '
+            '→ ~${(r['fullSongEstSec'] as num).toStringAsFixed(0)}s/song '
+            '(load ${r['loadMs']}ms, absMean ${(r['outAbsMean'] as num).toStringAsFixed(4)})');
+      } else {
+        lines.add('$provider: FAILED ${r?['error']}');
+      }
+    }
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        title: const Text('Stem benchmark',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(lines.join('\n\n'),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
