@@ -57,6 +57,7 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.19.0
   permission_handler: ^11.3.1
+  in_app_review: ^2.0.12
 
 dev_dependencies:
   flutter_test:

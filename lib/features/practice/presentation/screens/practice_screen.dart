@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/review/review_service.dart';
 import '../../../library/data/models/track.dart';
 import '../../../library/presentation/providers/library_provider.dart';
 import '../../data/models/practice_session.dart';
@@ -65,10 +66,19 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
     // Watch to trigger rebuilds on save, but actual rows are built from
     // the merged-with-active list below (so the topmost row ticks live).
     ref.watch(practiceProvider);
-    final groups = _aggregate(practice.allSessions());
+    final allSessions = practice.allSessions();
+    final groups = _aggregate(allSessions);
     final canLoadMore =
         _displayCount < groups.length && _displayCount < _displayCap;
     final shown = groups.take(_displayCount).toList();
+
+    // Ask for a Play rating at a positive milestone (once per install).
+    // Fire-and-forget; ReviewService gates on its own flag + threshold.
+    // ignore: discarded_futures
+    ReviewService.instance.maybePrompt(
+      currentStreak: streak,
+      totalSessions: allSessions.length,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
