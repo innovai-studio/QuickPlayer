@@ -136,3 +136,96 @@ approved quality. The v2.0 build path:
 Remaining unknowns for the actual v2.0 (not blockers): onnxruntime-
 android integration + EP selection on real devices; the fp16 Cast
 fixup; whether static-quant can recover size without quality loss.
+
+## Acceleration — getting under 5 min on mobile
+
+Target: <5 min/song on mobile (baseline ARM CPU est. was 5–11 min).
+
+**Tuned desktop baseline.** With `ORT_ENABLE_ALL` graph optimization +
+thread tuning, the single-segment time drops and the full 6:10 song
+goes from 159 s to **~130 s** (i7-8750H). Thread scaling (per 7.8 s
+segment): 1t=6.19 s, 2t=3.83 s, 4t=2.88 s, 6t=2.75 s, **12t=3.21 s**
+— it plateaus at 4–6 cores and *regresses* past that (memory-bandwidth
+bound, oversubscription). Implication for ARM: the big cores carry it;
+LITTLE cores add little.
+
+**Where the time goes (ORT op profile, per segment):**
+
+| op group | share | what it is |
+|----------|-------|------------|
+| FusedMatMul + Gemm + MatMul | **~40%** | cross-transformer attention + linear layers |
+| Conv + ConvTranspose | ~20% | encoder / decoder |
+| InstanceNorm / Mul / Add / Transpose / Split | rest | norms + our STFT reshape overhead |
+
+40% matmul + 20% conv is *exactly* what XNNPACK and NPUs accelerate —
+good news.
+
+**Levers, ranked by payoff / risk:**
+
+| # | Lever | Expected | Devices | Risk | Quality |
+|---|-------|----------|---------|------|---------|
+| 1 | **XNNPACK EP** (ARM NEON kernels) | ~1.3–2× | all (CPU) | low | unchanged |
+| 2 | **NNAPI / QNN EP** (NPU/GPU/DSP) | ~2–5× | flagships | med (needs CPU fallback) | unchanged |
+| 3 | **overlap = 0** (avoid demucs' 0.25 default) | save ~25% | all | none | ~unchanged |
+| 4 | **STFT/ISTFT out of the ONNX graph** (native FFT) | save ~10–15% + cleaner quant target | all | med | unchanged |
+| 5 | **static int8** (per-channel + calibration, *not* dynamic) | ~2–4× | all | high | at risk — measure |
+
+XNNPACK and NNAPI both ship inside `onnxruntime-android`; they're
+integration work, not research risk. Their real speedups can only be
+measured on-device (the desktop pip build has neither EP).
+
+**Projected full-song time:**
+
+| Scenario | Est. | <5 min? |
+|----------|------|---------|
+| mid-range ARM, generic ORT CPU | ~270–340 s | borderline |
+| mid-range ARM + **XNNPACK** | ~180–230 s | **yes (3–3.8 min)** |
+| flagship + **NNAPI/NPU** | ~60–120 s | **yes (1–2 min)** |
+
+**Conclusion:** <5 min is achievable on mid-range purely via XNNPACK
+(CPU, no quality loss); flagships reach 1–2 min with NNAPI. int8 is an
+extra 2–4× but quality-risky — measured separately (see int8 section).
+Exact device numbers wait for the onnxruntime-android integration.
+
+## int8 quantization — measured, REJECTED
+
+Tested three int8 variants against the fp32 ONNX on the real MERs song
+(SDR = 10·log10(‖fp32‖²/‖fp32−int8‖²); >~30 dB ≈ inaudible, ~0 dB =
+destroyed):
+
+| Variant | Size | drums | bass | other | vocals | speed (full song) |
+|---------|------|-------|------|-------|--------|-------------------|
+| fp32 (ref) | 241 MB | — | — | — | — | 145 s |
+| dynamic | 126 MB | — rel diff 1.73 (garbage) — | | | 214 s (slower) |
+| **static, all** (per-ch, QDQ, 10-seg calib) | 123 MB | 2.3 | −0.3 | −1.3 | −0.7 dB | 214 s (slower) |
+| **static, conv-only** | 216 MB | 8.0 | 7.8 | 0.5 | 0.0 dB | 3.74 s/seg (slower) |
+
+**Verdict: int8 is out, in every form.** All variants destroy quality —
+especially the "other"/"vocals" stems, which are computed as residuals
+and accumulate the most quantization noise through the InstanceNorm +
+masking. And on x86 ORT it's *slower*, not faster (quant/dequant
+overhead with no int8 matmul win for this graph; ARM with i8mm *might*
+be faster but the quality is unusable regardless). Even conv-only
+(leaving the DFT/attention matmuls in fp32) still wrecks other/vocals.
+The earlier "~20 MB int8" hope is dead.
+
+Size reduction therefore comes from **fp16, not int8**. Speed comes
+from **execution providers (XNNPACK/NNAPI), not quantization.**
+
+## Model variants kept (`stem_spike/models/`, git-ignored)
+
+| File | Size | Status |
+|------|------|--------|
+| `htdemucs_fp32.onnx` | 241 MB | ✅ ship-quality, ORT==PyTorch 5.9e-4 |
+| `htdemucs_fp16.onnx` | ~121 MB | size-halving path (see fp16 note) |
+| `htdemucs_int8.onnx` | 123 MB | ❌ kept only as evidence int8 is broken |
+
+Audition: fp32 stems in `~/Music/MERs_stems/`, broken int8 stems in
+`~/Music/MERs_stems_int8/` (hear the degradation for yourself).
+
+The user's intent is to **keep all variants** and later expose a
+quality/speed tier — as a runtime switch, a user-facing setting, or a
+**paid-tier lever** (faster/higher-quality separation = higher price).
+With int8 out, the realistic tiers are fp16 (smaller download) vs fp32
+(best quality), and CPU vs NNAPI (speed) — not a quality ladder from
+quantization.
