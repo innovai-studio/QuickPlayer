@@ -13,13 +13,19 @@ import '../../../library/data/models/track.dart';
 import '../../data/models/ab_loop.dart';
 import '../../data/models/marker.dart';
 import '../../data/models/play_mode.dart';
+import '../../../practice/presentation/providers/practice_provider.dart';
 import 'player_state.dart';
 
 final playerProvider = StateNotifierProvider<PlayerNotifier, AppPlayerState>((ref) {
-  return PlayerNotifier();
+  return PlayerNotifier(ref);
 });
 
 class PlayerNotifier extends StateNotifier<AppPlayerState> {
+  /// Ref handle so we can drive sibling notifiers (e.g. the practice-session
+  /// recorder) from playback transitions without making them subscribe to
+  /// our state externally.
+  final Ref _ref;
+
   final AudioPlayerService _audioService = AudioPlayerService();
   final AudioAnalyzerService _analyzerService = AudioAnalyzerService();
   final AudioEffectsService _effectsService = AudioEffectsService();
@@ -30,9 +36,10 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
 
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<PlayerState>? _playerStateSubscription;
+  Timer? _practiceCheckpointTimer;
   bool _isAnalyzing = false;
 
-  PlayerNotifier() : super(const AppPlayerState()) {
+  PlayerNotifier(this._ref) : super(const AppPlayerState()) {
     _initStreams();
     _seedFocusFromSettings();
   }
@@ -76,6 +83,7 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
       final effectivelyPlaying = playerState.playing && !isCompleted;
       if (state.isPlaying != effectivelyPlaying) {
         state = state.copyWith(isPlaying: effectivelyPlaying);
+        _onPlayingChanged(effectivelyPlaying);
       }
 
       if (isCompleted) {
@@ -797,8 +805,44 @@ class PlayerNotifier extends StateNotifier<AppPlayerState> {
     }
   }
 
+  /// Hook fired whenever isPlaying flips. Opens / closes a practice
+  /// session and runs a periodic checkpoint while playback is live so
+  /// the recorded time survives an unexpected process death (Android
+  /// killing us under memory pressure, etc.).
+  void _onPlayingChanged(bool nowPlaying) {
+    final practice = _ref.read(practiceProvider.notifier);
+    final track = state.currentTrack;
+    if (nowPlaying && track != null) {
+      practice.onPlayStarted(track.id, trackName: track.name);
+      _startPracticeCheckpointTimer();
+    } else {
+      _stopPracticeCheckpointTimer();
+      // ignore: discarded_futures
+      practice.onPlayEnded();
+    }
+  }
+
+  void _startPracticeCheckpointTimer() {
+    _practiceCheckpointTimer?.cancel();
+    _practiceCheckpointTimer =
+        Timer.periodic(const Duration(seconds: 15), (_) {
+      // ignore: discarded_futures
+      _ref.read(practiceProvider.notifier).checkpoint();
+    });
+  }
+
+  void _stopPracticeCheckpointTimer() {
+    _practiceCheckpointTimer?.cancel();
+    _practiceCheckpointTimer = null;
+  }
+
   @override
   void dispose() {
+    _stopPracticeCheckpointTimer();
+    // Flush any in-flight practice session so its accumulated time
+    // isn't lost when the player notifier is torn down.
+    // ignore: discarded_futures
+    _ref.read(practiceProvider.notifier).onPlayEnded();
     _positionSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _audioService.dispose();

@@ -1,7 +1,7 @@
 name: quickplayer
 description: "Music practice assistant with speed/pitch control and A-B loop"
 publish_to: 'none'
-version: 1.3.0+15
+version: 1.4.0+16
 
 environment:
   sdk: ^3.6.1
@@ -36,7 +36,11 @@ dependencies:
   # platform plugin -- SoundPool is the canonical Android API for
   # short, non-focus-requesting SFX that mixes into the music stream.
   audio_session: ^0.1.21
-  audio_waveforms: ^1.2.0
+  # audio_waveforms was previously used for peak extraction but its
+  # native WaveformExtractor never sets `started = true`, so its
+  # `stop()` is a no-op and the MediaCodec decoder leaks. The second
+  # extraction in any given process hangs forever. We now decode peaks
+  # natively in WaveformPeaksHandler.kt instead.
 
   # Storage
   hive: ^2.2.3
@@ -53,6 +57,7 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.19.0
   permission_handler: ^11.3.1
+  in_app_review: ^2.0.12
 
 dev_dependencies:
   flutter_test:

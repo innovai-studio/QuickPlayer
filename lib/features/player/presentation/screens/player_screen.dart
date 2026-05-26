@@ -111,14 +111,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      // Waveform or Progress bar
+                      // Waveform or Progress bar. Real peaks come from
+                      // the native MediaCodec extractor via
+                      // WaveformExtractor; results are cached on the
+                      // Track so re-opening the song skips extraction.
                       if (settings.showWaveform && track != null)
                         WaveformView(
                           filePath: track.filePath,
+                          cachedPeaks: track.waveformPeaks,
                           position: playerState.position,
                           duration: playerState.duration,
                           onSeek: (position) =>
                               ref.read(playerProvider.notifier).seek(position),
+                          onPeaksExtracted: (peaks) async {
+                            // Persist for imported tracks. Device-audio
+                            // tracks (isExternal) aren't in Hive, so
+                            // their peaks live only in this session.
+                            if (track.isExternal) return;
+                            final updated =
+                                track.copyWith(waveformPeaks: peaks);
+                            await StorageService().saveTrack(updated);
+                            ref
+                                .read(playerProvider.notifier)
+                                .updateCurrentTrack(updated);
+                          },
                         )
                       else
                         _buildProgressBar(playerState),

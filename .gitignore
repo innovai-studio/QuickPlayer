@@ -58,3 +58,13 @@ release-v*/
 
 # Local research / competitor analysis PDFs etc.
 Ref/
+
+# Stem-separation spike venv (large, regenerable)
+stem_spike/
+
+# Stem ONNX spike: generated models + pycache (regenerable, large)
+tools/stem_onnx/*.onnx
+tools/stem_onnx/__pycache__/
+
+# ORT profiling dumps
+onnxruntime_profile__*.json
