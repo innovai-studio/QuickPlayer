@@ -7,6 +7,7 @@ import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/stem/stem_separator.dart';
+import '../../../stem/presentation/widgets/stem_progress_dialog.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -218,10 +219,6 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _runStemSeparate(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Separating 20s excerpt… (see logcat)')),
-    );
     // App can't write to /data/local/tmp; use its external files dir
     // (pullable at /sdcard/Android/data/<pkg>/files/stems_out).
     final ext = await getExternalStorageDirectory();
@@ -232,24 +229,13 @@ class SettingsScreen extends ConsumerWidget {
       outDir: outDir,
       threads: 4,
     );
-    debugPrint('STEMSEP $r');
-    if (!context.mounted) return;
+    debugPrint('STEMSEP start $r');
+    if (!context.mounted || r?['started'] != true) return;
+    // Persistent progress dialog that updates smoothly from the stream.
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
-        title: const Text('Separate (P2a)',
-            style: TextStyle(color: AppColors.textPrimary)),
-        content: Text(
-          r?['ok'] == true
-              ? 'OK in ${(r!['elapsedSec'] as num).toStringAsFixed(1)}s\n${(r['stems'] as List).join('\n')}'
-              : 'FAILED: ${r?['error']}',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (_) => const StemProgressDialog(),
     );
   }
 

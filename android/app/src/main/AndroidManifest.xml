@@ -9,6 +9,11 @@
          locked. mediaPlayback is the audio-specific service type. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- Stem separation runs as a mediaProcessing foreground service so
+         the long on-device inference survives backgrounding and shows a
+         progress notification (Android 14+ type for media transcoding/
+         processing work). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <!-- Required by android.media.audiofx.Visualizer (output-mix tap)
@@ -80,6 +85,12 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON"/>
             </intent-filter>
         </receiver>
+
+        <!-- On-device stem separation worker (long ONNX inference). -->
+        <service
+            android:name=".StemSeparationService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProcessing"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

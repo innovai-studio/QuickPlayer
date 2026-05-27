@@ -9,6 +9,15 @@ class StemSeparator {
   static final StemSeparator instance = StemSeparator._();
 
   static const _channel = MethodChannel('com.quickplayer/stem_separator');
+  static const _progress =
+      EventChannel('com.quickplayer/stem_separator/progress');
+
+  /// Progress/completion stream from the separation foreground service.
+  /// Events are maps: {event: 'progress', progress: 0..1} |
+  /// {event: 'done', stems: [paths]} | {event: 'error', error: msg}.
+  Stream<Map<String, dynamic>> get progressStream => _progress
+      .receiveBroadcastStream()
+      .map((e) => Map<String, dynamic>.from(e as Map));
 
   /// Run one 7.8 s segment through the model under [provider]
   /// ('cpu' | 'xnnpack' | 'nnapi') and return the native timing map:
@@ -34,8 +43,9 @@ class StemSeparator {
     }
   }
 
-  /// P2a: separate [audioPath] into 4 stems written under [outDir]
-  /// (drums/bass/other/vocals as raw f32). Returns {ok, stems, elapsedSec}.
+  /// Start the separation foreground service for [audioPath] → 4 stems
+  /// under [outDir]. Returns {started: true} immediately; progress and
+  /// completion arrive on [progressStream].
   Future<Map<String, dynamic>?> separate({
     required String modelPath,
     required String audioPath,

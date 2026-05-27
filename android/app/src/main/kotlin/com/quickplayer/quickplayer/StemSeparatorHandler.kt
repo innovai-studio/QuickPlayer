@@ -3,6 +3,12 @@ package com.quickplayer.quickplayer
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import androidx.core.content.ContextCompat
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +32,10 @@ import java.util.EnumSet
  * tools/stem_onnx/. The desktop projection was 5-11 min/song CPU,
  * 3-3.8 min with XNNPACK; this measures the truth on the actual device.
  */
-class StemSeparatorHandler : MethodChannel.MethodCallHandler {
+class StemSeparatorHandler(
+    private val context: Context,
+) : MethodChannel.MethodCallHandler, EventChannel.StreamHandler,
+    StemSeparationService.Listener {
 
     companion object {
         private const val CHANNELS = 2
@@ -34,6 +43,32 @@ class StemSeparatorHandler : MethodChannel.MethodCallHandler {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val env: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var progressSink: EventChannel.EventSink? = null
+
+    // --- progress EventChannel (com.quickplayer/stem_separator/progress) ---
+
+    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        progressSink = events
+        StemSeparationService.listener = this
+    }
+
+    override fun onCancel(arguments: Any?) {
+        progressSink = null
+    }
+
+    // Service callbacks -> Flutter sink (always on the main thread).
+    override fun onProgress(progress: Double) {
+        mainHandler.post { progressSink?.success(mapOf("event" to "progress", "progress" to progress)) }
+    }
+
+    override fun onDone(stems: List<String>) {
+        mainHandler.post { progressSink?.success(mapOf("event" to "done", "stems" to stems)) }
+    }
+
+    override fun onError(message: String) {
+        mainHandler.post { progressSink?.success(mapOf("event" to "error", "error" to message)) }
+    }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -43,8 +78,9 @@ class StemSeparatorHandler : MethodChannel.MethodCallHandler {
         }
     }
 
-    /** P2a: full-song separation. Returns the 4 stem file paths + timing.
-     *  (Foreground service + progress events come in P2b.) */
+    /** P2b: start the foreground service that runs the separation.
+     *  Returns immediately; progress/done/error arrive on the progress
+     *  EventChannel. */
     private fun separate(call: MethodCall, result: MethodChannel.Result) {
         val modelPath = call.argument<String>("modelPath")
         val audioPath = call.argument<String>("audioPath")
@@ -53,20 +89,17 @@ class StemSeparatorHandler : MethodChannel.MethodCallHandler {
         if (modelPath == null || audioPath == null || outDir == null) {
             result.error("ARGS", "modelPath, audioPath, outDir required", null); return
         }
-        scope.launch {
-            val out = try {
-                val t0 = System.nanoTime()
-                val files = StemPipeline(env).separate(modelPath, audioPath, outDir, threads) {
-                    // P2a: log progress; P2b will stream it to Flutter.
-                    android.util.Log.i("StemPipeline", "progress ${(it * 100).toInt()}%")
-                }
-                mapOf("ok" to true, "stems" to files,
-                      "elapsedSec" to (System.nanoTime() - t0) / 1e9)
-            } catch (e: Throwable) {
-                mapOf("ok" to false, "error" to (e.message ?: e.toString()))
-            }
-            withContext(Dispatchers.Main) { result.success(out) }
+        if (StemSeparationService.isRunning) {
+            result.error("BUSY", "a separation is already running", null); return
         }
+        val intent = Intent(context, StemSeparationService::class.java).apply {
+            putExtra(StemSeparationService.EXTRA_MODEL, modelPath)
+            putExtra(StemSeparationService.EXTRA_AUDIO, audioPath)
+            putExtra(StemSeparationService.EXTRA_OUT, outDir)
+            putExtra(StemSeparationService.EXTRA_THREADS, threads)
+        }
+        ContextCompat.startForegroundService(context, intent)
+        result.success(mapOf("started" to true))
     }
 
     private fun benchmark(call: MethodCall, result: MethodChannel.Result) {
@@ -183,6 +216,12 @@ class StemSeparatorHandler : MethodChannel.MethodCallHandler {
 
     fun release() {
         scope.cancel()
+        progressSink = null
+        // Don't null the service listener if a job is still running in the
+        // background -- only detach if it points back at us.
+        if (StemSeparationService.listener === this && !StemSeparationService.isRunning) {
+            StemSeparationService.listener = null
+        }
     }
 }
 
