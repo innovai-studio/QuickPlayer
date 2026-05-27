@@ -8,6 +8,9 @@ import '../../../../shared/extensions/duration_extension.dart';
 import '../../../../shared/widgets/collapsible_surface.dart';
 import '../../../library/data/models/track.dart';
 import '../../../library/presentation/providers/library_provider.dart';
+import '../../../stem/presentation/providers/stem_controller.dart';
+import '../../../stem/presentation/widgets/stem_progress_dialog.dart';
+import '../../../stem/presentation/screens/stem_mixer_screen.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../data/models/play_mode.dart';
 import '../providers/player_provider.dart';
@@ -95,6 +98,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         centerTitle: true,
+        actions: [
+          if (track != null) _StemAction(track: track),
+        ],
       ),
       body: playerState.isLoading
           ? const Center(
@@ -864,6 +870,72 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// App-bar action for stem separation. Reflects the per-track stem state:
+/// tap to separate (or open the mixer once ready). Separation runs in a
+/// foreground service; progress shows in [StemProgressDialog].
+class _StemAction extends ConsumerWidget {
+  final Track track;
+  const _StemAction({required this.track});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(stemControllerProvider(track.id));
+    final IconData icon;
+    switch (state.status) {
+      case StemStatus.ready:
+        icon = Icons.graphic_eq;
+      case StemStatus.error:
+        icon = Icons.error_outline;
+      default:
+        icon = Icons.splitscreen;
+    }
+
+    if (state.status == StemStatus.separating) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Center(
+          child: SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: AppColors.primaryStart),
+          ),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: Icon(icon,
+          color: state.status == StemStatus.ready
+              ? AppColors.primaryStart
+              : AppColors.textPrimary),
+      tooltip: 'Stem separation',
+      onPressed: () async {
+        final notifier = ref.read(stemControllerProvider(track.id).notifier);
+        if (state.status == StemStatus.ready && state.stems != null) {
+          // Already separated -> open the mixer.
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => StemMixerScreen(track: track, stems: state.stems!),
+          ));
+          return;
+        }
+        // Start separation + show progress; open the mixer when it lands.
+        notifier.separate(track);
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const StemProgressDialog(),
+        );
+        final after = ref.read(stemControllerProvider(track.id));
+        if (after.status == StemStatus.ready && after.stems != null && context.mounted) {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => StemMixerScreen(track: track, stems: after.stems!),
+          ));
+        }
+      },
     );
   }
 }

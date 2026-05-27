@@ -7,6 +7,9 @@ import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/stem/stem_separator.dart';
+import '../../../library/data/models/track.dart';
+import '../../../stem/data/models/stem_set.dart';
+import '../../../stem/presentation/screens/stem_mixer_screen.dart';
 import '../../../stem/presentation/widgets/stem_progress_dialog.dart';
 import '../providers/settings_provider.dart';
 
@@ -198,6 +201,15 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                Center(
+                  child: TextButton(
+                    onPressed: () => _openMixerWithExcerpt(context),
+                    child: const Text(
+                      'Open mixer w/ excerpt stems (P3)',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -216,6 +228,35 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Debug: open the mixer directly on the excerpt stems already written
+  /// to the app's external files dir (skips the ~11 min full separation
+  /// so we can verify the mixer's sync + mute/solo/volume quickly).
+  Future<void> _openMixerWithExcerpt(BuildContext context) async {
+    final ext = await getExternalStorageDirectory();
+    final dir = '${ext!.path}/stems_out';
+    final stems = StemSet(
+      trackId: 'debug_excerpt',
+      drumsPath: '$dir/drums.m4a',
+      bassPath: '$dir/bass.m4a',
+      otherPath: '$dir/other.m4a',
+      vocalsPath: '$dir/vocals.m4a',
+      segmentSeconds: 2.0,
+      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    final track = Track(
+      id: 'debug_excerpt',
+      name: 'MERs excerpt (debug)',
+      filePath: '$dir/drums.m4a',
+      durationMs: 20000,
+      fileSize: 0,
+      createdAt: DateTime.now(),
+    );
+    if (!context.mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => StemMixerScreen(track: track, stems: stems),
+    ));
   }
 
   Future<void> _runStemSeparate(BuildContext context) async {

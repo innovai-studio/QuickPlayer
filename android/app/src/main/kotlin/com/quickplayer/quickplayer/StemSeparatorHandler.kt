@@ -74,6 +74,8 @@ class StemSeparatorHandler(
         when (call.method) {
             "benchmark" -> benchmark(call, result)
             "separate" -> separate(call, result)
+            "totalRamMb" -> result.success(totalRamMb())
+            "isRunning" -> result.success(StemSeparationService.isRunning)
             else -> result.notImplemented()
         }
     }
@@ -212,6 +214,14 @@ class StemSeparatorHandler(
         }
         walk(v)
         return if (n == 0L) 0.0 else sum / n
+    }
+
+    /** Total device RAM in MB, used to pick the segment length / model. */
+    private fun totalRamMb(): Int {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val mi = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        return (mi.totalMem / (1024 * 1024)).toInt()
     }
 
     fun release() {

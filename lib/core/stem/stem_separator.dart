@@ -43,6 +43,14 @@ class StemSeparator {
     }
   }
 
+  /// Total device RAM in MB (for picking the segment length / model).
+  Future<int> totalRamMb() async =>
+      (await _channel.invokeMethod<int>('totalRamMb')) ?? 0;
+
+  /// Whether a separation foreground service is currently running.
+  Future<bool> isRunning() async =>
+      (await _channel.invokeMethod<bool>('isRunning')) ?? false;
+
   /// Start the separation foreground service for [audioPath] → 4 stems
   /// under [outDir]. Returns {started: true} immediately; progress and
   /// completion arrive on [progressStream].

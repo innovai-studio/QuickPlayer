@@ -24,6 +24,7 @@ class AppConstants {
   static const String settingsBox = 'settings';
   static const String playlistsBox = 'playlists';
   static const String practiceSessionsBox = 'practice_sessions';
+  static const String stemsBox = 'stem_sets';
 
   // Supported audio formats
   static const List<String> supportedFormats = [
