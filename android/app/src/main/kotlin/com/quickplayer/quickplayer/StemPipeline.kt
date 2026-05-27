@@ -8,8 +8,6 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.abs
@@ -93,7 +91,9 @@ class StemPipeline(private val env: OrtEnvironment) {
                 onProgress(0.05 + 0.85 * min(1.0, pos.toDouble() / frames))
             }
 
-            // Normalize by accumulated weight + write stems.
+            // Normalize by accumulated weight + encode each stem to AAC
+            // (.m4a). Raw f32 would be ~130 MB/stem for a full song; AAC
+            // keeps the 4-stem cache to ~10-15 MB.
             val files = ArrayList<String>(4)
             File(outDir).mkdirs()
             for (s in 0 until 4) {
@@ -101,9 +101,10 @@ class StemPipeline(private val env: OrtEnvironment) {
                     val arr = out[s][c]
                     for (i in 0 until frames) arr[i] /= max(wsum[i], 1e-6f)
                 }
-                val f = File(outDir, "${SOURCES[s]}.f32")
-                writeStereoF32(f, out[s], frames)
+                val f = File(outDir, "${SOURCES[s]}.m4a")
+                AacEncoder.encode(f, out[s], frames, SR)
                 files.add(f.absolutePath)
+                onProgress(0.90 + 0.10 * (s + 1) / 4.0)  // encode phase
             }
             onProgress(1.0)
             return files
@@ -208,13 +209,6 @@ class StemPipeline(private val env: OrtEnvironment) {
         } }
         walk(v)
         return list.toFloatArray()
-    }
-
-    private fun writeStereoF32(f: File, ch: Array<FloatArray>, frames: Int) {
-        // interleaved f32 little-endian (L,R per frame) for easy ffmpeg/compare
-        val bb = ByteBuffer.allocate(frames * CHANNELS * 4).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until frames) { bb.putFloat(ch[0][i]); bb.putFloat(ch[1][i]) }
-        FileOutputStream(f).use { it.write(bb.array()) }
     }
 
     /** Minimal growable float buffer to avoid boxing in decode loop. */
