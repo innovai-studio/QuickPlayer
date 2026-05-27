@@ -29,12 +29,15 @@ class MainActivity: AudioServiceActivity() {
     private val WAVEFORM_CHANNEL = "com.quickplayer/waveform_peaks"
     private val STEM_CHANNEL = "com.quickplayer/stem_separator"
     private val STEM_PROGRESS_CHANNEL = "com.quickplayer/stem_separator/progress"
+    private val MIXER_CHANNEL = "com.quickplayer/stem_mixer"
+    private val MIXER_POSITION_CHANNEL = "com.quickplayer/stem_mixer/position"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val effectsHandler = AudioEffectsHandler()
     private val spectrumHandler = SpectrumHandler()
     private val soundPoolHandler by lazy { SoundPoolHandler(applicationContext) }
     private val waveformHandler = WaveformPeaksHandler()
     private val stemHandler by lazy { StemSeparatorHandler(applicationContext) }
+    private val mixerHandler by lazy { StemMixerHandler(applicationContext) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -57,6 +60,11 @@ class MainActivity: AudioServiceActivity() {
             .setMethodCallHandler(stemHandler)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, STEM_PROGRESS_CHANNEL)
             .setStreamHandler(stemHandler)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MIXER_CHANNEL)
+            .setMethodCallHandler(mixerHandler)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, MIXER_POSITION_CHANNEL)
+            .setStreamHandler(mixerHandler)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -407,5 +415,6 @@ class MainActivity: AudioServiceActivity() {
         soundPoolHandler.release()
         waveformHandler.release()
         stemHandler.release()
+        mixerHandler.release()
     }
 }

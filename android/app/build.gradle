@@ -104,4 +104,11 @@ dependencies {
     // provider and ships XNNPACK-backed CPU kernels, which we need to
     // hit the <5 min/song target -- see docs/STEM_ONNX_EXPORT_SPIKE.md.
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+
+    // media3 ExoPlayer for the 4-track stem mixer. just_audio_background
+    // hard-refuses a second just_audio instance, so the mixer drives four
+    // native ExoPlayers directly (started together + drift-resynced) to
+    // play the separated stems with per-stem mute/solo/volume. Pinned to
+    // the version just_audio already pulls in transitively.
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
 }

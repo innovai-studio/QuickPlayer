@@ -1,17 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/stem/stem_mixer.dart';
 import '../../../../shared/extensions/duration_extension.dart';
 import '../../../library/data/models/track.dart';
 import '../../data/models/stem_set.dart';
 
-/// 4-stem practice mixer: play the separated drums/bass/other/vocals in
-/// sync with per-stem mute / solo / volume. Uses four just_audio players
-/// started together; a light periodic resync keeps them aligned (the
-/// stems are sample-aligned slices of the same song, so they only drift
-/// from independent clocks).
+/// 4-stem practice mixer: plays the separated drums/bass/other/vocals in
+/// sync with per-stem mute / solo / volume. Backed by the native 4×
+/// ExoPlayer mixer (StemMixerHandler.kt) — just_audio can't be used here
+/// because just_audio_background allows only one instance app-wide.
 class StemMixerScreen extends StatefulWidget {
   final Track track;
   final StemSet stems;
@@ -23,108 +21,57 @@ class StemMixerScreen extends StatefulWidget {
 
 class _StemMixerScreenState extends State<StemMixerScreen> {
   static const _names = ['Drums', 'Bass', 'Other', 'Vocals'];
-  static const _icons = [
-    Icons.album,
-    Icons.music_note,
-    Icons.piano,
-    Icons.mic,
-  ];
+  static const _icons = [Icons.album, Icons.music_note, Icons.piano, Icons.mic];
 
-  late final List<AudioPlayer> _players;
+  final _mixer = StemMixer.instance;
   final _volume = List<double>.filled(4, 1.0);
   final _muted = List<bool>.filled(4, false);
   final _soloed = List<bool>.filled(4, false);
 
+  StreamSubscription<MixerState>? _sub;
   bool _ready = false;
-  String? _initError;
   bool _playing = false;
+  bool _seeking = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
-  Timer? _resync;
-  StreamSubscription<Duration>? _posSub;
+  Duration _buffered = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    _players = List.generate(4, (_) => AudioPlayer());
-    _init();
-  }
-
-  Future<void> _init() async {
-    try {
-      final paths = widget.stems.paths;
-      Duration? dur;
-      for (var i = 0; i < 4; i++) {
-        // just_audio_background is global in this app and requires a
-        // MediaItem tag on every source, so set one per stem.
-        dur = await _players[i].setAudioSource(AudioSource.uri(
-          Uri.file(paths[i]),
-          tag: MediaItem(
-            id: '${widget.track.id}_${_names[i]}',
-            title: '${widget.track.name} — ${_names[i]}',
-          ),
-        ));
-      }
-      await _finishInit(dur);
-    } catch (e) {
-      if (mounted) setState(() => _initError = e.toString());
-    }
-  }
-
-  Future<void> _finishInit(Duration? dur) async {
-    // Drive position/duration off the drums player (index 0) as leader.
-    _duration = dur ?? Duration.zero;
-    _posSub = _players[0].positionStream.listen((p) {
-      if (mounted) setState(() => _position = p);
+    _sub = _mixer.stateStream.listen((s) {
+      if (!mounted) return;
+      setState(() {
+        if (!_ready && s.ready) _ready = true;
+        _playing = s.playing;
+        if (s.duration > Duration.zero) _duration = s.duration;
+        _buffered = s.buffered;
+        if (!_seeking) _position = s.position;
+      });
     });
-    // Resync followers to the leader if they drift more than ~50 ms.
-    _resync = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (!_playing) return;
-      final lead = _players[0].position;
-      for (var i = 1; i < 4; i++) {
-        if ((_players[i].position - lead).inMilliseconds.abs() > 50) {
-          await _players[i].seek(lead);
-        }
-      }
-    });
-    _applyGains();
-    if (mounted) setState(() => _ready = true);
+    _mixer.prepare(widget.stems.paths).then((_) => _applyGains());
   }
 
   void _applyGains() {
     final anySolo = _soloed.any((s) => s);
     for (var i = 0; i < 4; i++) {
       final audible = anySolo ? _soloed[i] : !_muted[i];
-      _players[i].setVolume(audible ? _volume[i] : 0.0);
+      _mixer.setVolume(i, audible ? _volume[i] : 0.0);
     }
   }
 
-  Future<void> _togglePlay() async {
+  void _togglePlay() {
     if (_playing) {
-      for (final p in _players) {
-        p.pause();
-      }
+      _mixer.pause();
     } else {
-      // Start all together for tight alignment.
-      await Future.wait(_players.map((p) => p.play()));
+      _mixer.play();
     }
-    setState(() => _playing = !_playing);
-  }
-
-  Future<void> _seek(Duration to) async {
-    for (final p in _players) {
-      await p.seek(to);
-    }
-    setState(() => _position = to);
   }
 
   @override
   void dispose() {
-    _resync?.cancel();
-    _posSub?.cancel();
-    for (final p in _players) {
-      p.dispose();
-    }
+    _sub?.cancel();
+    _mixer.release();
     super.dispose();
   }
 
@@ -140,16 +87,7 @@ class _StemMixerScreenState extends State<StemMixerScreen> {
             overflow: TextOverflow.ellipsis),
         centerTitle: true,
       ),
-      body: _initError != null
-          ? Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text('Mixer unavailable:\n$_initError',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.error)),
-              ),
-            )
-          : !_ready
+      body: !_ready
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primaryStart))
           : Column(
@@ -245,11 +183,26 @@ class _StemMixerScreenState extends State<StemMixerScreen> {
   }
 
   Widget _transport() {
-    final dur = _duration.inMilliseconds == 0 ? const Duration(seconds: 1) : _duration;
-    return Container(
+    final durMs =
+        _duration.inMilliseconds == 0 ? 1 : _duration.inMilliseconds;
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         children: [
+          // Thin buffer indicator: how far all 4 stems are buffered.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: (_buffered.inMilliseconds / durMs).clamp(0.0, 1.0),
+                minHeight: 2,
+                backgroundColor: AppColors.border,
+                valueColor: AlwaysStoppedAnimation(
+                    AppColors.primaryStart.withValues(alpha: 0.4)),
+              ),
+            ),
+          ),
           Row(
             children: [
               Text(_position.toDisplayString(),
@@ -257,12 +210,15 @@ class _StemMixerScreenState extends State<StemMixerScreen> {
                       color: AppColors.textSecondary, fontSize: 12)),
               Expanded(
                 child: Slider(
-                  value: _position.inMilliseconds
-                      .clamp(0, dur.inMilliseconds)
-                      .toDouble(),
-                  max: dur.inMilliseconds.toDouble(),
-                  onChanged: (v) =>
-                      _seek(Duration(milliseconds: v.round())),
+                  value: _position.inMilliseconds.clamp(0, durMs).toDouble(),
+                  max: durMs.toDouble(),
+                  onChangeStart: (_) => _seeking = true,
+                  onChanged: (v) => setState(
+                      () => _position = Duration(milliseconds: v.round())),
+                  onChangeEnd: (v) {
+                    _mixer.seek(Duration(milliseconds: v.round()));
+                    _seeking = false;
+                  },
                 ),
               ),
               Text(_duration.toDisplayString(),
