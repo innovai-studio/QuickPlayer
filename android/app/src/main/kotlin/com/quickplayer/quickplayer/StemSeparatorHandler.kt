@@ -38,7 +38,34 @@ class StemSeparatorHandler : MethodChannel.MethodCallHandler {
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "benchmark" -> benchmark(call, result)
+            "separate" -> separate(call, result)
             else -> result.notImplemented()
+        }
+    }
+
+    /** P2a: full-song separation. Returns the 4 stem file paths + timing.
+     *  (Foreground service + progress events come in P2b.) */
+    private fun separate(call: MethodCall, result: MethodChannel.Result) {
+        val modelPath = call.argument<String>("modelPath")
+        val audioPath = call.argument<String>("audioPath")
+        val outDir = call.argument<String>("outDir")
+        val threads = call.argument<Int>("threads") ?: 4
+        if (modelPath == null || audioPath == null || outDir == null) {
+            result.error("ARGS", "modelPath, audioPath, outDir required", null); return
+        }
+        scope.launch {
+            val out = try {
+                val t0 = System.nanoTime()
+                val files = StemPipeline(env).separate(modelPath, audioPath, outDir, threads) {
+                    // P2a: log progress; P2b will stream it to Flutter.
+                    android.util.Log.i("StemPipeline", "progress ${(it * 100).toInt()}%")
+                }
+                mapOf("ok" to true, "stems" to files,
+                      "elapsedSec" to (System.nanoTime() - t0) / 1e9)
+            } catch (e: Throwable) {
+                mapOf("ok" to false, "error" to (e.message ?: e.toString()))
+            }
+            withContext(Dispatchers.Main) { result.success(out) }
         }
     }
 

@@ -33,4 +33,24 @@ class StemSeparator {
       return {'ok': false, 'error': '${e.code}: ${e.message}'};
     }
   }
+
+  /// P2a: separate [audioPath] into 4 stems written under [outDir]
+  /// (drums/bass/other/vocals as raw f32). Returns {ok, stems, elapsedSec}.
+  Future<Map<String, dynamic>?> separate({
+    required String modelPath,
+    required String audioPath,
+    required String outDir,
+    int threads = 4,
+  }) async {
+    try {
+      return await _channel.invokeMapMethod<String, dynamic>('separate', {
+        'modelPath': modelPath,
+        'audioPath': audioPath,
+        'outDir': outDir,
+        'threads': threads,
+      });
+    } on PlatformException catch (e) {
+      return {'ok': false, 'error': '${e.code}: ${e.message}'};
+    }
+  }
 }

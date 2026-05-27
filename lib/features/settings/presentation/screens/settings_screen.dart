@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -187,6 +188,15 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                Center(
+                  child: TextButton(
+                    onPressed: () => _runStemSeparate(context),
+                    child: const Text(
+                      'Separate 20s excerpt (P2a)',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -202,6 +212,42 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runStemSeparate(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Separating 20s excerpt… (see logcat)')),
+    );
+    // App can't write to /data/local/tmp; use its external files dir
+    // (pullable at /sdcard/Android/data/<pkg>/files/stems_out).
+    final ext = await getExternalStorageDirectory();
+    final outDir = '${ext!.path}/stems_out';
+    final r = await StemSeparator.instance.separate(
+      modelPath: '/data/local/tmp/htdemucs_2s.onnx',
+      audioPath: '/data/local/tmp/mers_excerpt.m4a',
+      outDir: outDir,
+      threads: 4,
+    );
+    debugPrint('STEMSEP $r');
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        title: const Text('Separate (P2a)',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          r?['ok'] == true
+              ? 'OK in ${(r!['elapsedSec'] as num).toStringAsFixed(1)}s\n${(r['stems'] as List).join('\n')}'
+              : 'FAILED: ${r?['error']}',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
         ],
       ),
     );
