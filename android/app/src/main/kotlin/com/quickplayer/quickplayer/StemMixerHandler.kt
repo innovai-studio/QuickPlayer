@@ -39,6 +39,17 @@ class StemMixerHandler(
     private val resyncGraceMs = 1500L
     private var playStartedAtMs = 0L
 
+    // First-play stutter mitigation: AudioTrack hardware cold-start
+    // causes the user's first play() to glitch; the workaround the user
+    // discovered ("pause + replay from start") just means the tracks are
+    // already warm by the second attempt. We do that warm-up cycle
+    // silently (volumes 0 -> play -> pause -> seek 0 -> restore) right
+    // after all 4 players reach STATE_READY, before reporting ready=true
+    // to Flutter. Users tap play once and get smooth first playback.
+    private enum class Warmup { PENDING, RUNNING, DONE }
+    private var warmup = Warmup.PENDING
+    private val warmupDurationMs = 400L
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "prepare" -> {
@@ -67,6 +78,7 @@ class StemMixerHandler(
 
     private fun prepare(paths: List<String>) {
         releasePlayers()
+        warmup = Warmup.PENDING
         players = paths.map { path ->
             ExoPlayer.Builder(context).build().apply {
                 setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(java.io.File(path))))
@@ -114,22 +126,39 @@ class StemMixerHandler(
     private fun emit() {
         val p = players.getOrNull(0) ?: return
         val dur = if (p.duration == androidx.media3.common.C.TIME_UNSET) 0L else p.duration
-        // Ready only when ALL stems are buffered, so the first play starts
-        // from a filled buffer (no cold-start stutter).
         val allReady = players.isNotEmpty() &&
             players.all { it.playbackState == Player.STATE_READY }
         // Buffered position = the slowest stem (the bottleneck for smooth
         // synced playback), so the UI bar reflects when all 4 are safe.
         val buffered = players.minOf { it.bufferedPosition }
+        // Hold ready=false until the silent AudioTrack warm-up cycle has
+        // finished, so the user's first play() never hits a cold start.
+        val readyForUi = allReady && warmup == Warmup.DONE
         sink?.success(
             mapOf(
                 "pos" to p.currentPosition,
                 "dur" to dur,
-                "playing" to p.isPlaying,
-                "ready" to allReady,
+                "playing" to (p.isPlaying && warmup == Warmup.DONE),
+                "ready" to readyForUi,
                 "buffered" to buffered,
             )
         )
+        if (allReady && warmup == Warmup.PENDING) startWarmup()
+    }
+
+    private fun startWarmup() {
+        if (warmup != Warmup.PENDING || players.isEmpty()) return
+        warmup = Warmup.RUNNING
+        val savedVolumes = players.map { it.volume }
+        players.forEach { it.volume = 0f }
+        players.forEach { it.play() }
+        main.postDelayed({
+            players.forEach { it.pause() }
+            players.forEach { it.seekTo(0) }
+            for (i in players.indices) players[i].volume = savedVolumes[i]
+            warmup = Warmup.DONE
+            emit()
+        }, warmupDurationMs)
     }
 
     private fun releasePlayers() {
