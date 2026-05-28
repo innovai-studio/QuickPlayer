@@ -42,6 +42,7 @@ class StemSeparationService : Service() {
         const val EXTRA_AUDIO = "audioPath"
         const val EXTRA_OUT = "outDir"
         const val EXTRA_THREADS = "threads"
+        const val EXTRA_PROVIDER = "provider"
         private const val CHANNEL_ID = "stem_separation"
         private const val NOTIF_ID = 7011
     }
@@ -56,6 +57,7 @@ class StemSeparationService : Service() {
         val audio = intent?.getStringExtra(EXTRA_AUDIO)
         val outDir = intent?.getStringExtra(EXTRA_OUT)
         val threads = intent?.getIntExtra(EXTRA_THREADS, 4) ?: 4
+        val provider = intent?.getStringExtra(EXTRA_PROVIDER) ?: "cpu"
         if (model == null || audio == null || outDir == null) {
             stopSelf(); return START_NOT_STICKY
         }
@@ -65,7 +67,7 @@ class StemSeparationService : Service() {
         job = scope.launch {
             try {
                 val files = StemPipeline(OrtEnvironment.getEnvironment())
-                    .separate(model, audio, outDir, threads) { p ->
+                    .separate(model, audio, outDir, threads, provider) { p ->
                         updateNotification("Separating stems…", (p * 100).toInt())
                         listener?.onProgress(p)
                     }

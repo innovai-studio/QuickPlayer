@@ -7,6 +7,7 @@ import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/stem/stem_separator.dart';
+import '../../../../core/storage/storage_service.dart';
 import '../../../library/data/models/track.dart';
 import '../../../stem/data/models/stem_set.dart';
 import '../../../stem/presentation/screens/stem_mixer_screen.dart';
@@ -210,6 +211,7 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                _NpuToggleRow(),
               ],
             ),
             const SizedBox(height: 24),
@@ -477,6 +479,50 @@ class SettingsScreen extends ConsumerWidget {
               'Reset',
               style: TextStyle(color: AppColors.error),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Debug toggle: enable the NNAPI execution provider for stem separation.
+/// Default OFF -- production users get the proven CPU path. We flip this
+/// on per device once we've measured NPU acceleration vs CPU baseline on
+/// a real flagship (P3-related, behind a feature flag for safety).
+class _NpuToggleRow extends StatefulWidget {
+  @override
+  State<_NpuToggleRow> createState() => _NpuToggleRowState();
+}
+
+class _NpuToggleRowState extends State<_NpuToggleRow> {
+  final _storage = StorageService();
+  bool _on = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _on = _storage.getSetting<bool>('stem_use_npu') == true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Use NNAPI for stem separation',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            ),
+          ),
+          Switch(
+            value: _on,
+            onChanged: (v) async {
+              setState(() => _on = v);
+              await _storage.setSetting('stem_use_npu', v);
+            },
           ),
         ],
       ),

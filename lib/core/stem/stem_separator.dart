@@ -15,9 +15,15 @@ class StemSeparator {
   /// Progress/completion stream from the separation foreground service.
   /// Events are maps: {event: 'progress', progress: 0..1} |
   /// {event: 'done', stems: [paths]} | {event: 'error', error: msg}.
-  Stream<Map<String, dynamic>> get progressStream => _progress
+  ///
+  /// Cached as a single broadcast stream: both the controller and the
+  /// progress dialog listen, and calling receiveBroadcastStream() more
+  /// than once opens duplicate native subscriptions whose sinks clobber
+  /// each other (events then stop reaching one of the listeners).
+  late final Stream<Map<String, dynamic>> progressStream = _progress
       .receiveBroadcastStream()
-      .map((e) => Map<String, dynamic>.from(e as Map));
+      .map((e) => Map<String, dynamic>.from(e as Map))
+      .asBroadcastStream();
 
   /// Run one 7.8 s segment through the model under [provider]
   /// ('cpu' | 'xnnpack' | 'nnapi') and return the native timing map:
@@ -53,12 +59,15 @@ class StemSeparator {
 
   /// Start the separation foreground service for [audioPath] → 4 stems
   /// under [outDir]. Returns {started: true} immediately; progress and
-  /// completion arrive on [progressStream].
+  /// completion arrive on [progressStream]. [provider] picks the ORT
+  /// execution provider: 'cpu' (default, proven on all devices) or
+  /// 'nnapi' (auto-falls-back to CPU if NPU init fails).
   Future<Map<String, dynamic>?> separate({
     required String modelPath,
     required String audioPath,
     required String outDir,
     int threads = 4,
+    String provider = 'cpu',
   }) async {
     try {
       return await _channel.invokeMapMethod<String, dynamic>('separate', {
@@ -66,6 +75,7 @@ class StemSeparator {
         'audioPath': audioPath,
         'outDir': outDir,
         'threads': threads,
+        'provider': provider,
       });
     } on PlatformException catch (e) {
       return {'ok': false, 'error': '${e.code}: ${e.message}'};

@@ -34,6 +34,7 @@
         android:label="quickplayer"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:largeHeap="true"
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"

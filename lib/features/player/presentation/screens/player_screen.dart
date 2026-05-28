@@ -8,6 +8,7 @@ import '../../../../shared/extensions/duration_extension.dart';
 import '../../../../shared/widgets/collapsible_surface.dart';
 import '../../../library/data/models/track.dart';
 import '../../../library/presentation/providers/library_provider.dart';
+import '../../../stem/data/models/stem_set.dart';
 import '../../../stem/presentation/providers/stem_controller.dart';
 import '../../../stem/presentation/widgets/stem_progress_dialog.dart';
 import '../../../stem/presentation/screens/stem_mixer_screen.dart';
@@ -916,10 +917,7 @@ class _StemAction extends ConsumerWidget {
       onPressed: () async {
         final notifier = ref.read(stemControllerProvider(track.id).notifier);
         if (state.status == StemStatus.ready && state.stems != null) {
-          // Already separated -> open the mixer.
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => StemMixerScreen(track: track, stems: state.stems!),
-          ));
+          _openMixer(context, ref, track, state.stems!);
           return;
         }
         // Start separation + show progress; open the mixer when it lands.
@@ -931,11 +929,20 @@ class _StemAction extends ConsumerWidget {
         );
         final after = ref.read(stemControllerProvider(track.id));
         if (after.status == StemStatus.ready && after.stems != null && context.mounted) {
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => StemMixerScreen(track: track, stems: after.stems!),
-          ));
+          _openMixer(context, ref, track, after.stems!);
         }
       },
     );
+  }
+
+  /// Pause the main player before opening the mixer so the two don't play
+  /// over each other (the mixer has its own four ExoPlayers).
+  void _openMixer(BuildContext context, WidgetRef ref, Track track, StemSet stems) {
+    if (ref.read(playerProvider).isPlaying) {
+      ref.read(playerProvider.notifier).togglePlay();
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => StemMixerScreen(track: track, stems: stems),
+    ));
   }
 }

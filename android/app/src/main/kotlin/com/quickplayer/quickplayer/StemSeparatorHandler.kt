@@ -88,6 +88,7 @@ class StemSeparatorHandler(
         val audioPath = call.argument<String>("audioPath")
         val outDir = call.argument<String>("outDir")
         val threads = call.argument<Int>("threads") ?: 4
+        val provider = call.argument<String>("provider") ?: "cpu"
         if (modelPath == null || audioPath == null || outDir == null) {
             result.error("ARGS", "modelPath, audioPath, outDir required", null); return
         }
@@ -99,6 +100,7 @@ class StemSeparatorHandler(
             putExtra(StemSeparationService.EXTRA_AUDIO, audioPath)
             putExtra(StemSeparationService.EXTRA_OUT, outDir)
             putExtra(StemSeparationService.EXTRA_THREADS, threads)
+            putExtra(StemSeparationService.EXTRA_PROVIDER, provider)
         }
         ContextCompat.startForegroundService(context, intent)
         result.success(mapOf("started" to true))

@@ -108,10 +108,15 @@ class StemController extends StateNotifier<StemState> {
       }
     });
 
+    // NPU acceleration is opt-in (default off) until we've measured it
+    // on real flagships; the native side falls back to CPU on any NNAPI
+    // init failure anyway.
+    final useNnapi = _storage.getSetting<bool>('stem_use_npu') == true;
     final r = await _sep.separate(
       modelPath: modelPath,
       audioPath: track.filePath,
       outDir: outDir,
+      provider: useNnapi ? 'nnapi' : 'cpu',
     );
     if (r?['started'] != true) {
       state = state.copyWith(

@@ -35,10 +35,13 @@ class StemMixer {
   static const _channel = MethodChannel('com.quickplayer/stem_mixer');
   static const _position = EventChannel('com.quickplayer/stem_mixer/position');
 
-  /// Position/state updates (~5/s) from the native mixer.
-  Stream<MixerState> get stateStream => _position
+  /// Position/state updates (~5/s) from the native mixer. Cached as a
+  /// single broadcast stream (one native subscription, multiple Dart
+  /// listeners share it).
+  late final Stream<MixerState> stateStream = _position
       .receiveBroadcastStream()
-      .map((e) => MixerState.fromMap(e as Map));
+      .map((e) => MixerState.fromMap(e as Map))
+      .asBroadcastStream();
 
   /// Load the given stem files (drums/bass/other/vocals order) into four
   /// native players. Listen to [stateStream] for `ready`.
