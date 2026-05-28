@@ -149,3 +149,98 @@ def patch(model):
     model._mask = types.MethodType(_mask, model)
     model._ispec = types.MethodType(_ispec, model)
     return model
+
+
+def patch_external_spec(model):
+    """v2.1 variant: graph takes (mix, spec) and returns (zout, xt_audio),
+    skipping STFT/ISTFT inside the model. Native code does FFT before and
+    iFFT + sum after, which keeps ~30% of ops off the NPU partitioner and
+    avoids the matmul-DFT inside the graph entirely.
+
+    Assumes patch() has already been applied (complex-free + use_train_
+    segment=False + fixed pos-embedding shift). Adds a custom forward
+    that's a near-copy of the original up to _mask, then returns early.
+    """
+    from einops import rearrange
+
+    def forward_v21(self, mix, spec):
+        # spec: pre-computed (B, C, Fr, T, 2) real-stacked, computed in
+        # native code to match what self._spec(mix) used to produce.
+        length = mix.shape[-1]
+        z = spec
+        mag = self._magnitude(z)
+        x = mag
+        B, C, Fq, T = x.shape
+
+        # freq-branch normalization
+        mean = x.mean(dim=(1, 2, 3), keepdim=True)
+        std = x.std(dim=(1, 2, 3), keepdim=True)
+        x = (x - mean) / (1e-5 + std)
+
+        # time-branch input + normalization
+        xt = mix
+        meant = xt.mean(dim=(1, 2), keepdim=True)
+        stdt = xt.std(dim=(1, 2), keepdim=True)
+        xt = (xt - meant) / (1e-5 + stdt)
+
+        # encoder
+        saved, saved_t, lengths, lengths_t = [], [], [], []
+        for idx, encode in enumerate(self.encoder):
+            lengths.append(x.shape[-1])
+            inject = None
+            if idx < len(self.tencoder):
+                lengths_t.append(xt.shape[-1])
+                tenc = self.tencoder[idx]
+                xt = tenc(xt)
+                if not tenc.empty:
+                    saved_t.append(xt)
+                else:
+                    inject = xt
+            x = encode(x, inject)
+            if idx == 0 and self.freq_emb is not None:
+                frs = torch.arange(x.shape[-2], device=x.device)
+                emb = self.freq_emb(frs).t()[None, :, :, None].expand_as(x)
+                x = x + self.freq_emb_scale * emb
+            saved.append(x)
+
+        # cross-transformer (patched _get_pos_embedding from patch())
+        if self.crosstransformer:
+            if self.bottom_channels:
+                b, c, f, t = x.shape
+                x = rearrange(x, "b c f t-> b c (f t)")
+                x = self.channel_upsampler(x)
+                x = rearrange(x, "b c (f t)-> b c f t", f=f)
+                xt = self.channel_upsampler_t(xt)
+            x, xt = self.crosstransformer(x, xt)
+            if self.bottom_channels:
+                x = rearrange(x, "b c f t-> b c (f t)")
+                x = self.channel_downsampler(x)
+                x = rearrange(x, "b c (f t)-> b c f t", f=f)
+                xt = self.channel_downsampler_t(xt)
+
+        # decoder
+        for idx, decode in enumerate(self.decoder):
+            skip = saved.pop(-1)
+            x, pre = decode(x, skip, lengths.pop(-1))
+            offset = self.depth - len(self.tdecoder)
+            if idx >= offset:
+                tdec = self.tdecoder[idx - offset]
+                length_t = lengths_t.pop(-1)
+                if tdec.empty:
+                    pre = pre[:, :, 0]
+                    xt, _ = tdec(pre, None, length_t)
+                else:
+                    skip = saved_t.pop(-1)
+                    xt, _ = tdec(xt, skip, length_t)
+
+        S = len(self.sources)
+        x = x.view(B, S, -1, Fq, T)
+        x = x * std[:, None] + mean[:, None]
+        zout = self._mask(z, x)                       # (B,S,C,Fr,T,2) real-stacked
+        xt = xt.view(B, S, -1, length)
+        xt = xt * stdt[:, None] + meant[:, None]      # (B,S,C,length)
+        # Native side iFFTs zout and sums with xt to form the final stems.
+        return zout, xt
+
+    model.forward = types.MethodType(forward_v21, model)
+    return model
