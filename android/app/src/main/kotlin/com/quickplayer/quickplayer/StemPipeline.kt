@@ -56,17 +56,22 @@ class StemPipeline(private val env: OrtEnvironment) {
         val sinks = pcmFiles.map { BufferedOutputStream(FileOutputStream(it), 1 shl 16) }
 
         try {
-            val inName = session.inputNames.iterator().next()
-            val seg = (session.inputInfo[inName]!!.info as TensorInfo).shape[2].toInt()
+            val inputNames = session.inputNames.toList()
+            // v2.1 model has 2 inputs (mix + spec, native FFT); v2.0 has 1 (mix only).
+            val isV21 = "spec" in inputNames
+            val mixName = if ("mix" in inputNames) "mix" else inputNames.first()
+            val seg = (session.inputInfo[mixName]!!.info as TensorInfo).shape[2].toInt()
             val stride = (seg * (1 - OVERLAP)).toInt()
             val win = bartlett(seg)
 
-            // Sliding overlap-add window of width `seg`, with `base` the
-            // absolute frame index of window[0]. Invariant: base == pos at
-            // the start of each segment (we flush+shift by `stride` after).
+            // v2.1 spec parameters (htdemucs: n_fft=4096, hop=1024).
+            val nFft = 4096
+            val hop = 1024
+
             val accum = Array(4) { Array(CHANNELS) { FloatArray(seg) } }
             val wsum = FloatArray(seg)
             val chunk = FloatArray(CHANNELS * seg)
+            val mixCh = Array(CHANNELS) { FloatArray(seg) }     // reused per segment in v2.1
             val s16 = ByteArrayOutput(stride * CHANNELS * 4 * 2)
 
             var pos = 0
@@ -77,19 +82,52 @@ class StemPipeline(private val env: OrtEnvironment) {
                     chunk[i] = left[pos + i] / 32768f
                     chunk[seg + i] = right[pos + i] / 32768f
                 }
-                val shape = longArrayOf(1, CHANNELS.toLong(), seg.toLong())
-                OnnxTensor.createTensor(env, FloatBuffer.wrap(chunk), shape).use { input ->
-                    session.run(mapOf(inName to input)).use { res ->
-                        // output (1, 4, 2, seg) -> nested arrays; index directly
-                        // (no per-segment boxing/flatten).
-                        @Suppress("UNCHECKED_CAST")
-                        val batch = (res[0].value as Array<*>)[0] as Array<*>
-                        for (s in 0 until 4) {
-                            val srcs = batch[s] as Array<*>
-                            for (c in 0 until CHANNELS) {
-                                val chArr = srcs[c] as FloatArray
+                val mixShape = longArrayOf(1, CHANNELS.toLong(), seg.toLong())
+
+                if (isV21) {
+                    // v2.1 path: native STFT -> ONNX(mix, spec) -> native iSTFT + xt sum.
+                    for (i in 0 until seg) { mixCh[0][i] = chunk[i]; mixCh[1][i] = chunk[seg + i] }
+                    val spec = SpecOps.stft(mixCh, nFft, hop)
+                    val specShape = longArrayOf(
+                        1, CHANNELS.toLong(), spec.fr.toLong(), spec.t.toLong(), 2,
+                    )
+                    val mixT = OnnxTensor.createTensor(env, FloatBuffer.wrap(chunk), mixShape)
+                    val specT = OnnxTensor.createTensor(env, FloatBuffer.wrap(spec.data), specShape)
+                    try {
+                        session.run(mapOf(mixName to mixT, "spec" to specT)).use { res ->
+                            // res[0]=zout (1,4,2,Fr,T,2) ; res[1]=xt (1,4,2,seg)
+                            val z = res[0] as OnnxTensor
+                            val xt = res[1] as OnnxTensor
+                            val zArr = FloatArray(4 * CHANNELS * spec.fr * spec.t * 2)
+                            z.floatBuffer.get(zArr)
+                            val xtArr = FloatArray(4 * CHANNELS * seg)
+                            xt.floatBuffer.get(xtArr)
+                            val freqAudio = SpecOps.istft(
+                                zArr, 4, CHANNELS, spec.fr, spec.t, nFft, hop, seg,
+                            )
+                            for (s in 0 until 4) for (c in 0 until CHANNELS) {
                                 val dst = accum[s][c]
-                                for (i in 0 until len) dst[i] += chArr[i] * win[i]
+                                val fa = freqAudio[s][c]
+                                val xtBase = (s * CHANNELS + c) * seg
+                                for (i in 0 until len) {
+                                    dst[i] += (fa[i] + xtArr[xtBase + i]) * win[i]
+                                }
+                            }
+                        }
+                    } finally { mixT.close(); specT.close() }
+                } else {
+                    // v2.0 path: model outputs stems directly.
+                    OnnxTensor.createTensor(env, FloatBuffer.wrap(chunk), mixShape).use { input ->
+                        session.run(mapOf(mixName to input)).use { res ->
+                            @Suppress("UNCHECKED_CAST")
+                            val batch = (res[0].value as Array<*>)[0] as Array<*>
+                            for (s in 0 until 4) {
+                                val srcs = batch[s] as Array<*>
+                                for (c in 0 until CHANNELS) {
+                                    val chArr = srcs[c] as FloatArray
+                                    val dst = accum[s][c]
+                                    for (i in 0 until len) dst[i] += chArr[i] * win[i]
+                                }
                             }
                         }
                     }
