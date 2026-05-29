@@ -6,8 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../core/audio/audio_effects_service.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/i18n/locale_controller.dart';
 import '../../../../core/stem/stem_separator.dart';
 import '../../../../core/storage/storage_service.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../library/data/models/track.dart';
 import '../../../stem/data/models/stem_set.dart';
 import '../../../stem/presentation/screens/stem_mixer_screen.dart';
@@ -20,6 +22,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
+    final l = AppLocalizations.of(context);
+    final locale = ref.watch(localeControllerProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -161,6 +165,49 @@ class SettingsScreen extends ConsumerWidget {
                 (value) {
                   ref.read(settingsProvider.notifier).setKeepScreenOn(value);
                 },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Language Section
+          _buildSectionHeader(l.languageSectionTitle),
+          _buildCard(
+            children: [
+              InkWell(
+                onTap: () => _showLanguagePicker(context, ref),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        l.languageRowLabel,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            _localeLabel(l, locale),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.textSecondary,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -452,6 +499,73 @@ class SettingsScreen extends ConsumerWidget {
     return semitones > 0 ? '+$semitones' : '$semitones';
   }
 
+  // The three choices we expose. Order matches what the bottom sheet
+  // shows. `null` is "follow the OS"; everything else is a hard override.
+  static const _languageOptions = <Locale?>[
+    null,
+    Locale('en'),
+    Locale('zh', 'TW'),
+  ];
+
+  String _localeLabel(AppLocalizations l, Locale? locale) {
+    if (locale == null) return l.languageOptionSystem;
+    if (locale.languageCode == 'zh') return l.languageOptionChineseTraditional;
+    return l.languageOptionEnglish;
+  }
+
+  void _showLanguagePicker(BuildContext context, WidgetRef ref) {
+    final current = ref.read(localeControllerProvider);
+    final l = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  l.languageSectionTitle,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              for (final opt in _languageOptions)
+                _LanguageOptionTile(
+                  label: _localeLabel(l, opt),
+                  selected: _localesEqual(opt, current),
+                  onTap: () async {
+                    await ref
+                        .read(localeControllerProvider.notifier)
+                        .setLocale(opt);
+                    if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static bool _localesEqual(Locale? a, Locale? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.languageCode == b.languageCode &&
+        a.countryCode == b.countryCode &&
+        a.scriptCode == b.scriptCode;
+  }
+
   void _showResetDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
@@ -481,6 +595,53 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One row in the language bottom sheet. Highlights the current pick with
+/// a check icon + primary text colour so the user sees both the chosen
+/// option and the alternatives at a glance.
+class _LanguageOptionTile extends StatelessWidget {
+  const _LanguageOptionTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? AppColors.primaryStart
+                      : AppColors.textPrimary,
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(
+                Icons.check,
+                color: AppColors.primaryStart,
+                size: 20,
+              ),
+          ],
+        ),
       ),
     );
   }

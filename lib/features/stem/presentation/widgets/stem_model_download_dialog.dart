@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/model_installer.dart';
 import '../../data/stem_model_config.dart';
 
@@ -120,16 +121,21 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
         child: switch (_phase) {
-          _Phase.confirm => _buildConfirm(),
-          _Phase.downloading => _buildProgress(),
-          _Phase.failed => _buildFailed(),
+          _Phase.confirm => _buildConfirm(context),
+          _Phase.downloading => _buildProgress(context),
+          _Phase.failed => _buildFailed(context),
         },
       ),
     );
   }
 
-  Widget _buildConfirm() {
+  Widget _buildConfirm(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final mb = (_remainingBytes / (1024 * 1024)).toStringAsFixed(0);
+    final seg = widget.config.segmentSeconds;
+    final segLabel = seg == seg.truncateToDouble()
+        ? seg.toStringAsFixed(0)
+        : seg.toStringAsFixed(1);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,10 +144,10 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             const Icon(Icons.cloud_download, color: AppColors.primaryStart),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
-                '下載音軌分離模型',
-                style: TextStyle(
+                l.stemModelDownloadTitle,
+                style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -159,23 +165,23 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           ],
         ),
         const SizedBox(height: 14),
-        const _Bullet(
+        _Bullet(
           icon: Icons.smartphone,
-          text: '完全在裝置上執行,音檔不會上傳',
+          text: l.stemModelBenefitOnDevice,
         ),
         const SizedBox(height: 6),
-        const _Bullet(
+        _Bullet(
           icon: Icons.all_inclusive,
-          text: '無長度限制,單首歌可分離整曲',
+          text: l.stemModelBenefitNoLengthCap,
         ),
         const SizedBox(height: 6),
-        const _Bullet(
+        _Bullet(
           icon: Icons.download_done,
-          text: '只需下載一次,離線可用',
+          text: l.stemModelBenefitOnceOnly,
         ),
         const SizedBox(height: 14),
         Text(
-          '依您的裝置記憶體配置:${widget.config.segmentSeconds.toStringAsFixed(widget.config.segmentSeconds == widget.config.segmentSeconds.truncateToDouble() ? 0 : 1)} 秒片段模型',
+          l.stemModelVariantNotice(segLabel),
           style: const TextStyle(
             color: AppColors.textSecondary,
             fontSize: 11,
@@ -187,8 +193,8 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消',
-                  style: TextStyle(color: AppColors.textSecondary)),
+              child: Text(l.commonCancel,
+                  style: const TextStyle(color: AppColors.textSecondary)),
             ),
             const SizedBox(width: 4),
             FilledButton(
@@ -197,7 +203,7 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
                 foregroundColor: Colors.white,
               ),
               onPressed: _startDownload,
-              child: const Text('下載'),
+              child: Text(l.commonDownload),
             ),
           ],
         ),
@@ -205,7 +211,8 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
     );
   }
 
-  Widget _buildProgress() {
+  Widget _buildProgress(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final p = _last;
     final fraction = p?.fraction ?? 0;
     final pct = (fraction * 100).round();
@@ -217,10 +224,10 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             const Icon(Icons.cloud_download, color: AppColors.primaryStart),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
-                '下載模型中',
-                style: TextStyle(
+                l.stemModelDownloadingTitle,
+                style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -254,7 +261,7 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             Expanded(
               child: Text(
-                _phaseText(p),
+                _phaseText(context, p),
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
@@ -275,7 +282,7 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             Expanded(
               child: Text(
-                _bytesText(p),
+                _bytesText(context, p),
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 11,
@@ -283,7 +290,7 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
               ),
             ),
             Text(
-              _etaText(p),
+              _etaText(context, p),
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 11,
@@ -297,8 +304,8 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             TextButton(
               onPressed: _cancel,
-              child: const Text('取消',
-                  style: TextStyle(color: AppColors.textSecondary)),
+              child: Text(l.commonCancel,
+                  style: const TextStyle(color: AppColors.textSecondary)),
             ),
           ],
         ),
@@ -306,7 +313,8 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
     );
   }
 
-  Widget _buildFailed() {
+  Widget _buildFailed(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,10 +323,10 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             const Icon(Icons.error_outline, color: AppColors.error),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
-                '下載失敗',
-                style: TextStyle(
+                l.stemModelDownloadFailed,
+                style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -341,8 +349,8 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
           children: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('關閉',
-                  style: TextStyle(color: AppColors.textSecondary)),
+              child: Text(l.commonClose,
+                  style: const TextStyle(color: AppColors.textSecondary)),
             ),
             const SizedBox(width: 4),
             FilledButton(
@@ -351,7 +359,7 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
                 foregroundColor: Colors.white,
               ),
               onPressed: _retry,
-              child: const Text('重試'),
+              child: Text(l.commonRetry),
             ),
           ],
         ),
@@ -361,11 +369,13 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
 
   // ----- Text helpers --------------------------------------------------
 
-  String _phaseText(ModelInstallProgress? p) {
-    if (p == null) return '連線中…';
+  String _phaseText(BuildContext context, ModelInstallProgress? p) {
+    final l = AppLocalizations.of(context);
+    if (p == null) return l.stemModelConnecting;
     final ext = p.assetName.split('.').last;
-    final kind = ext == 'onnx' ? '模型結構' : '模型權重';
-    return '$kind (${p.assetIndex + 1}/${p.assetCount})';
+    return ext == 'onnx'
+        ? l.stemModelPhaseGraph(p.assetIndex + 1, p.assetCount)
+        : l.stemModelPhaseWeights(p.assetIndex + 1, p.assetCount);
   }
 
   String _rateText(ModelInstallProgress? p) {
@@ -376,21 +386,23 @@ class _StemModelDownloadDialogState extends State<_StemModelDownloadDialog> {
     return '${kbps.toStringAsFixed(0)} KB/s';
   }
 
-  String _bytesText(ModelInstallProgress? p) {
+  String _bytesText(BuildContext context, ModelInstallProgress? p) {
     if (p == null) return '';
+    final l = AppLocalizations.of(context);
     final dn = (p.bytesDone / (1024 * 1024)).toStringAsFixed(1);
     final tot = (p.bytesTotal / (1024 * 1024)).toStringAsFixed(0);
-    return '$dn / $tot MB';
+    return l.bytesProgress(dn, tot);
   }
 
-  String _etaText(ModelInstallProgress? p) {
+  String _etaText(BuildContext context, ModelInstallProgress? p) {
     if (p == null || p.bytesPerSec <= 0 || p.fraction <= 0.01) return '';
+    final l = AppLocalizations.of(context);
     final remaining = p.bytesTotal - p.bytesDone;
     final secs = (remaining / p.bytesPerSec).round();
     final m = secs ~/ 60, s = secs % 60;
-    if (m == 0) return '剩 ${s}s';
-    if (m < 10) return '剩 ${m}m ${s}s';
-    return '剩 $m 分鐘';
+    if (m == 0) return l.etaSecondsRemaining(s);
+    if (m < 10) return l.etaMinutesSecondsRemaining(m, s);
+    return l.etaMinutesRemaining(m);
   }
 }
 

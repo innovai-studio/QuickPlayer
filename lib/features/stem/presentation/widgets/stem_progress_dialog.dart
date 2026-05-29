@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/stem/stem_separator.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Persistent, smoothly-updating progress dialog for an in-flight stem
 /// separation. Shows: percent + live ETA derived from elapsed/progress,
@@ -16,7 +17,6 @@ class StemProgressDialog extends StatefulWidget {
 }
 
 class _StemProgressDialogState extends State<StemProgressDialog> {
-  static const _stems = ['Drums', 'Bass', 'Other', 'Vocals'];
   // Pipeline emits 0.85 + 0.15 * (s+1)/4 after each stem is AAC-encoded.
   static const _stemDoneAt = [0.8875, 0.925, 0.9625, 1.0];
 
@@ -61,30 +61,31 @@ class _StemProgressDialogState extends State<StemProgressDialog> {
     super.dispose();
   }
 
-  String _etaText() {
-    if (_progress < 0.1) return '預估中…';
-    if (_progress >= 1.0) return '完成';
+  String _etaText(AppLocalizations l) {
+    if (_progress < 0.1) return l.stemEtaEstimating;
+    if (_progress >= 1.0) return l.stemPhaseDone;
     final elapsed = DateTime.now().difference(_start).inSeconds;
     final remaining = (elapsed * (1 - _progress) / _progress).round();
     final m = remaining ~/ 60, s = remaining % 60;
-    if (m == 0) return '約 ${s}s 剩餘';
-    if (m < 10) return '約 ${m}m ${s}s 剩餘';
-    return '約 $m 分鐘剩餘';
+    if (m == 0) return l.etaSecondsRemaining(s);
+    if (m < 10) return l.etaMinutesSecondsRemaining(m, s);
+    return l.etaMinutesRemaining(m);
   }
 
-  String _phaseText() {
-    if (_failed) return '失敗:${_errorMsg ?? ""}';
-    if (_progress < 0.05) return '正在解碼音訊…';
-    if (_progress < 0.85) return '分離中(模型推論)…';
+  String _phaseText(AppLocalizations l) {
+    if (_failed) return l.stemFailedWithReason(_errorMsg ?? '');
+    if (_progress < 0.05) return l.stemPhaseDecoding;
+    if (_progress < 0.85) return l.stemPhaseSeparating;
     if (_progress < 1.0) {
       final encoded = _stemDoneAt.where((t) => _progress >= t).length;
-      return '編碼中 (${encoded + 1}/4)…';
+      return l.stemPhaseEncoding(encoded + 1, 4);
     }
-    return '完成';
+    return l.stemPhaseDone;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final pct = (_progress * 100).round();
     return Dialog(
       backgroundColor: AppColors.surfaceDark,
@@ -99,8 +100,8 @@ class _StemProgressDialogState extends State<StemProgressDialog> {
               children: [
                 const Icon(Icons.graphic_eq, color: AppColors.primaryStart),
                 const SizedBox(width: 10),
-                const Text('Separating stems',
-                    style: TextStyle(
+                Text(l.stemSeparatingTitle,
+                    style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.w700)),
@@ -128,24 +129,24 @@ class _StemProgressDialogState extends State<StemProgressDialog> {
             Row(
               children: [
                 Expanded(
-                  child: Text(_phaseText(),
+                  child: Text(_phaseText(l),
                       style: const TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
                 ),
                 if (!_failed && _progress < 1.0)
-                  Text(_etaText(),
+                  Text(_etaText(l),
                       style: const TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
             const SizedBox(height: 14),
-            ..._buildStemRows(),
+            ..._buildStemRows(l),
             if (_failed)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: _close,
-                  child: const Text('Close'),
+                  child: Text(l.commonClose),
                 ),
               ),
           ],
@@ -154,7 +155,13 @@ class _StemProgressDialogState extends State<StemProgressDialog> {
     );
   }
 
-  List<Widget> _buildStemRows() {
+  List<Widget> _buildStemRows(AppLocalizations l) {
+    final names = [
+      l.stemNameDrums,
+      l.stemNameBass,
+      l.stemNameOther,
+      l.stemNameVocals,
+    ];
     return List.generate(4, (i) {
       final done = _progress >= _stemDoneAt[i];
       final active =
@@ -184,7 +191,7 @@ class _StemProgressDialogState extends State<StemProgressDialog> {
                           color: color, size: 18),
             ),
             const SizedBox(width: 10),
-            Text(_stems[i],
+            Text(names[i],
                 style: TextStyle(
                     color: done ? AppColors.textPrimary : color,
                     fontSize: 13,

@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'core/constants/app_colors.dart';
+import 'core/i18n/locale_controller.dart';
 import 'core/storage/storage_service.dart';
+import 'l10n/app_localizations.dart';
 import 'routing/app_router.dart';
 
 void main() async {
@@ -41,14 +43,19 @@ void main() async {
   );
 }
 
-class QuickPlayerApp extends StatelessWidget {
+class QuickPlayerApp extends ConsumerWidget {
   const QuickPlayerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(localeControllerProvider);
     return MaterialApp.router(
       title: 'QuickPlayer',
       debugShowCheckedModeBanner: false,
+      // null = follow the OS via Flutter's default localeResolutionCallback.
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
