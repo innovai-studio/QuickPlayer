@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../core/stem/stem_separator.dart';
 import '../../../../core/storage/storage_service.dart';
 import '../../../library/data/models/track.dart';
+import '../../data/model_installer.dart';
 import '../../data/models/stem_set.dart';
 import '../../data/stem_model_config.dart';
 
@@ -76,7 +77,7 @@ class StemController extends StateNotifier<StemState> {
     if (modelPath == null) {
       state = state.copyWith(
           status: StemStatus.error,
-          error: 'Stem model not installed (${config.fileName})');
+          error: 'Stem model not installed (${config.graphFile})');
       return;
     }
     final outDir = await _stemDir(trackId);
@@ -132,17 +133,12 @@ class StemController extends StateNotifier<StemState> {
     state = const StemState();
   }
 
-  /// Resolve the model file. Production keeps models under the app
-  /// support dir's `models/` (downloaded on first use, P4); dev falls
-  /// back to the adb-pushed /data/local/tmp copy.
-  Future<String?> _resolveModelPath(StemModelConfig c) async {
-    final support = await getApplicationSupportDirectory();
-    final installed = File('${support.path}/models/${c.fileName}');
-    if (installed.existsSync()) return installed.path;
-    final dev = File('/data/local/tmp/${c.fileName}');
-    if (dev.existsSync()) return dev.path;
-    return null;
-  }
+  /// Resolve the model file. Delegates to [ModelInstaller.resolveGraphPath]
+  /// so the action button and the controller can't drift on what counts as
+  /// "installed" (CDN-installed under appSupport/models vs. dev-pushed
+  /// /data/local/tmp).
+  Future<String?> _resolveModelPath(StemModelConfig c) =>
+      ModelInstaller.resolveGraphPath(c);
 
   Future<String> _stemDir(String id) async {
     final base = await getApplicationSupportDirectory();

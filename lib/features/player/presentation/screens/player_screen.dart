@@ -8,8 +8,12 @@ import '../../../../shared/extensions/duration_extension.dart';
 import '../../../../shared/widgets/collapsible_surface.dart';
 import '../../../library/data/models/track.dart';
 import '../../../library/presentation/providers/library_provider.dart';
+import '../../../../core/stem/stem_separator.dart';
+import '../../../stem/data/model_installer.dart';
 import '../../../stem/data/models/stem_set.dart';
+import '../../../stem/data/stem_model_config.dart';
 import '../../../stem/presentation/providers/stem_controller.dart';
+import '../../../stem/presentation/widgets/stem_model_download_dialog.dart';
 import '../../../stem/presentation/widgets/stem_progress_dialog.dart';
 import '../../../stem/presentation/screens/stem_mixer_screen.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -920,6 +924,25 @@ class _StemAction extends ConsumerWidget {
           _openMixer(context, ref, track, state.stems!);
           return;
         }
+
+        // First-use model download: pick the RAM-appropriate variant and
+        // make sure its files are on disk before kicking off separation.
+        // The download dialog only mounts when nothing is resolvable yet
+        // (CDN-installed or dev-pushed), so repeat taps after the first
+        // separation skip straight to the progress dialog.
+        final ramMb = await StemSeparator.instance.totalRamMb();
+        final config = StemModelConfig.forRam(ramMb);
+        final existing = await ModelInstaller.resolveGraphPath(config);
+        if (existing == null) {
+          if (!context.mounted) return;
+          final ok = await showStemModelDownloadDialog(
+            context,
+            config: config,
+          );
+          if (!ok || !context.mounted) return;
+        }
+
+        if (!context.mounted) return;
         // Start separation + show progress; open the mixer when it lands.
         notifier.separate(track);
         await showDialog<void>(
