@@ -1,0 +1,63 @@
+=====================================
+中文版
+=====================================
+
+主旨：QuickPlayer v1.1.0 更新通知 🎵
+
+各位測試夥伴好！
+
+感謝大家持續參與 QuickPlayer 的測試，你們的回饋對我們非常重要！
+
+📦 新版本 v1.1.0 已發布
+
+🆕 新功能：
+• 裝置音樂瀏覽 - 直接播放手機上的音樂，無需匯入
+• 加入曲目庫 - 長按音檔可加入曲目庫或播放清單
+• 背景掃描 - App 會自動偵測新增的音樂檔案
+• 匯入標記 - 已加入的音檔會顯示綠色勾勾
+
+📲 如何更新：
+• 自動更新：若已開啟自動更新，App 會在背景自動更新
+• 手動更新：前往 Google Play → 我的應用程式 → QuickPlayer → 更新
+
+🙏 請幫忙測試：
+1. 進入「曲目庫」→「裝置音樂」分頁
+2. 確認能看到手機上的音樂檔案
+3. 長按任一音檔，測試「加入曲目庫」和「加入播放清單」功能
+4. 測試播放功能是否正常
+
+如有任何問題或建議，歡迎回覆此郵件！
+
+再次感謝各位的支持與協助 🙌
+
+=====================================
+English Version
+=====================================
+
+Subject: QuickPlayer v1.1.0 Update Notification 🎵
+
+Hi Testers!
+
+Thank you for your continued participation in testing QuickPlayer. Your feedback is invaluable to us!
+
+📦 New Version v1.1.0 Released
+
+🆕 New Features:
+• Device Music Browser - Play music directly from your phone without importing
+• Add to Library - Long-press any track to add to library or playlists
+• Background Scan - App automatically detects newly added music files
+• Import Indicator - Imported tracks display a green checkmark
+
+📲 How to Update:
+• Auto-update: If enabled, the app will update automatically
+• Manual update: Go to Google Play → My Apps → QuickPlayer → Update
+
+🙏 Please Help Test:
+1. Go to "Library" → "Device Audio" tab
+2. Verify you can see music files on your phone
+3. Long-press any track and test "Add to Tracks" and "Add to Playlist"
+4. Test playback functionality
+
+Please reply to this email if you encounter any issues or have suggestions!
+
+Thank you again for your support and help 🙌

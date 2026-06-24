@@ -1,0 +1,98 @@
+{
+  "@@locale": "en",
+
+  "commonCancel": "Cancel",
+  "commonClose": "Close",
+  "commonRetry": "Retry",
+  "commonDownload": "Download",
+  "commonOk": "OK",
+
+  "languageSectionTitle": "Language",
+  "languageRowLabel": "App language",
+  "languageOptionSystem": "System default",
+  "languageOptionEnglish": "English",
+  "languageOptionChineseTraditional": "繁體中文",
+
+  "stemModelDownloadTitle": "Download stem-separation model",
+  "stemModelBenefitOnDevice": "Runs 100% on-device — no upload",
+  "stemModelBenefitNoLengthCap": "No length cap — separate full songs",
+  "stemModelBenefitOnceOnly": "One-time download, then offline",
+  "@stemModelVariantNotice": {
+    "placeholders": {
+      "segment": {
+        "type": "String",
+        "example": "2"
+      }
+    }
+  },
+  "stemModelVariantNotice": "Picked for your device RAM: {segment}s-segment model",
+  "stemModelDownloadingTitle": "Downloading model",
+  "stemModelConnecting": "Connecting…",
+  "@stemModelPhaseGraph": {
+    "placeholders": {
+      "index": {"type": "int"},
+      "count": {"type": "int"}
+    }
+  },
+  "stemModelPhaseGraph": "Graph ({index}/{count})",
+  "@stemModelPhaseWeights": {
+    "placeholders": {
+      "index": {"type": "int"},
+      "count": {"type": "int"}
+    }
+  },
+  "stemModelPhaseWeights": "Weights ({index}/{count})",
+  "stemModelDownloadFailed": "Download failed",
+
+  "stemSeparatingTitle": "Separating stems",
+  "stemPhaseDecoding": "Decoding audio…",
+  "stemPhaseSeparating": "Separating (model inference)…",
+  "@stemPhaseEncoding": {
+    "placeholders": {
+      "index": {"type": "int"},
+      "count": {"type": "int"}
+    }
+  },
+  "stemPhaseEncoding": "Encoding ({index}/{count})…",
+  "stemPhaseDone": "Done",
+  "stemEtaEstimating": "Estimating…",
+  "@stemFailedWithReason": {
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
+  "stemFailedWithReason": "Failed: {reason}",
+
+  "stemNameDrums": "Drums",
+  "stemNameBass": "Bass",
+  "stemNameOther": "Other",
+  "stemNameVocals": "Vocals",
+
+  "@etaSecondsRemaining": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+  "etaSecondsRemaining": "~{seconds}s remaining",
+  "@etaMinutesSecondsRemaining": {
+    "placeholders": {
+      "minutes": {"type": "int"},
+      "seconds": {"type": "int"}
+    }
+  },
+  "etaMinutesSecondsRemaining": "~{minutes}m {seconds}s remaining",
+  "@etaMinutesRemaining": {
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "etaMinutesRemaining": "~{minutes} min remaining",
+
+  "@bytesProgress": {
+    "placeholders": {
+      "done": {"type": "String"},
+      "total": {"type": "String"}
+    }
+  },
+  "bytesProgress": "{done} / {total} MB"
+}

@@ -1,0 +1,32 @@
+<zh-TW>
+QuickPlayer v1.1.0 更新！
+
+新功能：
+• 裝置音樂瀏覽 - 直接播放手機上的音樂，無需匯入
+• 加入曲目庫 - 長按音檔可加入曲目庫或播放清單
+• 背景掃描 - 自動偵測新增的音樂檔案
+• 匯入標記 - 已加入的音檔顯示綠色勾勾
+
+原有功能：
+• 速度調整 - 0.25x 至 2.0x 變速播放，不改變音高
+• 音高調整 - ±12 半音調整
+• A-B 循環 - 標記段落重複練習
+• 練習標記 - 標記重要位置快速跳轉
+• 波形顯示 - 視覺化音頻波形
+</zh-TW>
+
+<en-US>
+v1.1.0 Update!
+
+New:
+• Device Music Browser - Play directly from phone
+• Long-press to add to library or playlists
+• Auto-detect new music files
+• Imported tracks show checkmark
+
+Features:
+• Speed: 0.25x-2.0x without pitch change
+• Pitch: ±12 semitones
+• A-B Loop for practice
+• Markers & Waveform display
+</en-US>

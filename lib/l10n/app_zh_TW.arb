@@ -1,0 +1,45 @@
+{
+  "@@locale": "zh_TW",
+
+  "commonCancel": "取消",
+  "commonClose": "關閉",
+  "commonRetry": "重試",
+  "commonDownload": "下載",
+  "commonOk": "確定",
+
+  "languageSectionTitle": "語言",
+  "languageRowLabel": "App 語言",
+  "languageOptionSystem": "跟隨系統",
+  "languageOptionEnglish": "English",
+  "languageOptionChineseTraditional": "繁體中文",
+
+  "stemModelDownloadTitle": "下載音軌分離模型",
+  "stemModelBenefitOnDevice": "完全在裝置上執行,音檔不會上傳",
+  "stemModelBenefitNoLengthCap": "無長度限制,單首歌可分離整曲",
+  "stemModelBenefitOnceOnly": "只需下載一次,離線可用",
+  "stemModelVariantNotice": "依您的裝置記憶體配置:{segment} 秒片段模型",
+  "stemModelDownloadingTitle": "下載模型中",
+  "stemModelConnecting": "連線中…",
+  "stemModelPhaseGraph": "模型結構 ({index}/{count})",
+  "stemModelPhaseWeights": "模型權重 ({index}/{count})",
+  "stemModelDownloadFailed": "下載失敗",
+
+  "stemSeparatingTitle": "分離音軌中",
+  "stemPhaseDecoding": "正在解碼音訊…",
+  "stemPhaseSeparating": "分離中(模型推論)…",
+  "stemPhaseEncoding": "編碼中 ({index}/{count})…",
+  "stemPhaseDone": "完成",
+  "stemEtaEstimating": "預估中…",
+  "stemFailedWithReason": "失敗:{reason}",
+
+  "stemNameDrums": "鼓組",
+  "stemNameBass": "貝斯",
+  "stemNameOther": "其他",
+  "stemNameVocals": "人聲",
+
+  "etaSecondsRemaining": "約 {seconds} 秒",
+  "etaMinutesSecondsRemaining": "約 {minutes} 分 {seconds} 秒",
+  "etaMinutesRemaining": "約 {minutes} 分鐘",
+
+  "bytesProgress": "{done} / {total} MB"
+}

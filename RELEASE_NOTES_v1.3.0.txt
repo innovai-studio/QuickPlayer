@@ -1,0 +1,42 @@
+<zh-TW>
+QuickPlayer v1.3.0 重大更新！
+
+新功能：
+• 背景播放穩定不中斷 - 鎖螢幕後音樂繼續播,鎖螢幕媒體控制 + 通知列控制 + 藍牙耳機按鈕都可用
+• 可摺疊面板 - 速度 / 音調 / Focus EQ / 節拍器 / A-B 循環 / 標記都可以收起與展開,避免誤觸,並會記住每個面板的狀態
+• 重寫節拍器音訊 - 改用原生 Android SoundPool,不再跟主歌爭奪音訊焦點,可同時跟歌曲混音播放
+• A-B 循環更穩定 - 不再依賴會跟 MediaSession 衝突的 ClippingAudioSource
+
+優化：
+• 通知列 / 鎖螢幕顯示歌曲名稱而非檔案路徑
+• 歌曲結束後再按播放可直接從頭播,不必兩次點擊
+• Loop 跳回 A 點時節拍器自動延續不卡死
+
+延續功能：
+• Focus EQ 五段預設 + 客製 EQ + 即時頻譜分析
+• Tap-to-sync 節拍器 + 多拍號(2/4 / 3/4 / 4/4 / 6/8 / 12/8)
+• 速度 0.25x-2.0x、音調 ±12 半音
+• A-B 段落循環、練習標記
+• 自動 BPM / Key 分析
+</zh-TW>
+
+<en-US>
+QuickPlayer v1.3.0 Major Update!
+
+New:
+• Stable background playback — music keeps going when the screen locks, with lockscreen / notification / Bluetooth headset controls
+• Collapsible panels — Speed / Pitch / Focus EQ / Metronome / A-B Loop / Markers can each be hidden to avoid mis-taps; the expand/collapse state is remembered per panel
+• Rewritten metronome audio path — native Android SoundPool, mixes alongside the song instead of fighting for audio focus
+• Steadier A-B Loop — no longer routed through ClippingAudioSource, which conflicted with the MediaSession
+
+Improvements:
+• Notification / lockscreen show the song name instead of the file path
+• Pressing play after a track ends restarts cleanly with one tap
+• Metronome no longer gets stuck when the loop wraps back to A
+
+Continuing:
+• Focus EQ with 5 presets + custom EQ + live spectrum analyser
+• Tap-to-sync metronome with multi time signatures (2/4 / 3/4 / 4/4 / 6/8 / 12/8)
+• Speed 0.25x–2.0x, pitch ±12 semitones
+• A-B loop and practice markers
+</en-US>

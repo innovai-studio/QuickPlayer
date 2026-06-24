@@ -1,0 +1,114 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// Load keystore properties
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "com.quickplayer.quickplayer"
+    compileSdk = 35
+    // Pin to NDK r27 -- the Flutter-default ndkVersion (r26) emits
+    // .so files with 4 KB ELF alignment, which Play Console rejects
+    // since Android 15+ devices may use 16 KB memory pages. r27
+    // produces 16 KB-aligned binaries by default.
+    ndkVersion = "27.0.12077973"
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    // libsqlite3.so / libmedia_kit_*.so come from media_kit, which we
+    // only use on Linux desktop builds (gated in main.dart). Including
+    // them in the Android APK is dead weight, and media_kit's
+    // armeabi-v7a libsqlite3.so ships at 4 KB ELF alignment which fails
+    // the Play Console 16 KB page-size check. Excluding them removes
+    // the failing lib without having to drop the Linux desktop dep.
+    //
+    // useLegacyPackaging=false also forces the packager to extract +
+    // repack jniLibs so the alignment check runs at build time.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            excludes += [
+                '**/libsqlite3.so',
+                '**/libmedia_kit_*.so',
+                '**/libavcodec.so',
+                '**/libavformat.so',
+                '**/libavutil.so',
+                '**/libswresample.so',
+                '**/libswscale.so',
+                '**/libavfilter.so',
+                '**/libavdevice.so',
+                '**/libmpv.so',
+            ]
+        }
+    }
+
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    defaultConfig {
+        applicationId = "com.quickplayer.quickplayer"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Bundle native debug symbols inside the AAB so Play Console
+            // can symbolicate native crash reports without us uploading
+            // a separate symbols.zip after every release.
+            ndk {
+                debugSymbolLevel = 'SYMBOL_TABLE'
+            }
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    // Kotlin coroutines for async audio analysis
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // ONNX Runtime for on-device stem separation (htdemucs). The full
+    // -android package (not -mobile) bundles the NNAPI execution
+    // provider and ships XNNPACK-backed CPU kernels, which we need to
+    // hit the <5 min/song target -- see docs/STEM_ONNX_EXPORT_SPIKE.md.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+
+    // media3 ExoPlayer for the 4-track stem mixer. just_audio_background
+    // hard-refuses a second just_audio instance, so the mixer drives four
+    // native ExoPlayers directly (started together + drift-resynced) to
+    // play the separated stems with per-stem mute/solo/volume. Pinned to
+    // the version just_audio already pulls in transitively.
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+}

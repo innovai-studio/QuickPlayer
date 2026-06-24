@@ -1,0 +1,89 @@
+name: quickplayer
+description: "Music practice assistant with speed/pitch control and A-B loop"
+publish_to: 'none'
+version: 2.0.0+17
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Material/Cupertino localizations + intl plumbing for AppLocalizations.
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # Audio. just_audio_media_kit + media_kit_libs_linux were a Linux
+  # desktop fallback that dragged a 4 KB-aligned libsqlite3.so into
+  # the Android APK and failed Play Store's 16 KB page-size check, so
+  # they were dropped in v1.2.0. just_audio_background bridges to
+  # Android's MediaSession + foreground service so playback survives
+  # backgrounding and shows lockscreen / notification / BT-headset
+  # controls -- audio formerly stopped whenever Android killed the
+  # backgrounded process.
+  just_audio: ^0.9.42
+  just_audio_background: ^0.0.1-beta.13
+  # The metronome click is rendered via a custom MethodChannel onto
+  # Android's SoundPool (see lib/core/audio/metronome_service.dart +
+  # android/.../SoundPoolHandler.kt). just_audio + audioplayers both
+  # fought the audio focus model once just_audio_background hooked the
+  # platform plugin -- SoundPool is the canonical Android API for
+  # short, non-focus-requesting SFX that mixes into the music stream.
+  audio_session: ^0.1.21
+  # audio_waveforms was previously used for peak extraction but its
+  # native WaveformExtractor never sets `started = true`, so its
+  # `stop()` is a no-op and the MediaCodec decoder leaks. The second
+  # extraction in any given process hangs forever. We now decode peaks
+  # natively in WaveformPeaksHandler.kt instead.
+
+  # Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5
+
+  # File Picker
+  file_picker: ^8.1.6
+
+  # Device Audio Query (Cross-platform)
+  media_browser: ^1.1.5
+
+  # Utils
+  uuid: ^4.5.1
+  intl: ^0.19.0
+  permission_handler: ^11.3.1
+  in_app_review: ^2.0.12
+  # SHA-256 verification of stem-model downloads (see model_installer.dart).
+  crypto: ^3.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  riverpod_generator: ^2.6.2
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
+  flutter_launcher_icons: ^0.14.2
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/store/icon_1024x1024.png"
+  adaptive_icon_background: "#6366F1"
+  adaptive_icon_foreground: "assets/store/icon_1024x1024.png"
+
+flutter:
+  uses-material-design: true
+  # gen-l10n: reads lib/l10n/app_*.arb, emits AppLocalizations.
+  generate: true
+  assets:
+    - assets/store/
+    - assets/sounds/

@@ -1,0 +1,235 @@
+workflows:
+  # iOS 建置工作流程 (需要 Apple Developer 帳號)
+  ios-workflow:
+    name: iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        - app_store_credentials  # 在 Codemagic 設定中配置
+      vars:
+        BUNDLE_ID: "com.quickplayer.quickplayer"
+        APP_STORE_APP_ID: "YOUR_APP_STORE_APP_ID"  # 替換為實際值
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.quickplayer.quickplayer
+
+  # iOS 測試建置 (無需簽名)
+  ios-test-workflow:
+    name: iOS Test Build (No Signing)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'develop'
+          include: true
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Run build_runner
+        script: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+
+      - name: Build iOS (No Code Sign)
+        script: flutter build ios --debug --no-codesign
+
+    artifacts:
+      - build/ios/iphoneos/*.app
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'develop'
+          include: true
+
+    scripts:
+      - name: Set up local.properties
+        script: echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Run build_runner
+        script: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Flutter analyze
+        script: flutter analyze
+        ignore_failure: true
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+
+      - name: Build iOS
+        script: |
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number=$(($(git rev-list --count HEAD)))
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com  # 替換為您的 email
+        notify:
+          success: true
+          failure: true
+      # App Store Connect 發布 - 取消註解以啟用 TestFlight
+      # 需要先在 Codemagic 設定 App Store Connect API Key
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers  # TestFlight 測試群組名稱
+
+  # Android 建置工作流程
+  android-workflow:
+    name: Android Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      java: 17
+      groups:
+        - android_signing  # 在 Codemagic 設定 keystore
+        - google_play_credentials  # Google Play 服務帳號
+      vars:
+        PACKAGE_NAME: "com.quickplayer.quickplayer"
+      android_signing:
+        - keystore_reference
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+
+    scripts:
+      - name: Set up local.properties
+        script: echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Run build_runner
+        script: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Set up key.properties
+        script: |
+          cat >> "$CM_BUILD_DIR/android/key.properties" <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+
+      - name: Build APK (Release)
+        script: flutter build apk --release
+
+      - name: Build App Bundle (Release)
+        script: |
+          flutter build appbundle --release \
+            --build-name=1.0.0 \
+            --build-number=$(($(git rev-list --count HEAD)))
+
+    artifacts:
+      - build/app/outputs/**/*.apk
+      - build/app/outputs/**/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com  # 替換為您的 email
+        notify:
+          success: true
+          failure: true
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal  # internal → alpha → beta → production
+        submit_as_draft: true
+
+  # 開發測試工作流程 (快速建置)
+  dev-workflow:
+    name: Development Build
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+
+    triggering:
+      events:
+        - pull_request
+      branch_patterns:
+        - pattern: '*'
+          include: true
+        - pattern: 'main'
+          include: false
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Run build_runner
+        script: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Flutter analyze
+        script: flutter analyze
+
+      - name: Build iOS (Debug)
+        script: flutter build ios --debug --no-codesign
+
+      - name: Build APK (Debug)
+        script: flutter build apk --debug
+
+    artifacts:
+      - build/app/outputs/**/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: false
+          failure: true

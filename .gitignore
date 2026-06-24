@@ -1,0 +1,70 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android signing (DO NOT COMMIT)
+android/key.properties
+android/app/keystore/
+*.jks
+*.keystore
+
+# Release artifacts -- built from source via flutter build appbundle/apk.
+# Don't track ~50 MB binaries in git; produce them fresh per release.
+release-v*/
+*.aab
+*.apk
+
+# Local research / competitor analysis PDFs etc.
+Ref/
+
+# Stem-separation spike venv (large, regenerable)
+stem_spike/
+
+# Stem ONNX spike: generated models + pycache (regenerable, large)
+tools/stem_onnx/*.onnx
+tools/stem_onnx/__pycache__/
+
+# ORT profiling dumps
+onnxruntime_profile__*.json
