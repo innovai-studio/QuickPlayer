@@ -118,11 +118,19 @@ class StemSeparationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             nm.getNotificationChannel(CHANNEL_ID) == null
         ) {
+            // DEFAULT (not LOW) so the progress notification surfaces at
+            // the top of the shade rather than collapsing into the silent
+            // section. setOnlyAlertOnce on the Builder still suppresses
+            // sound on every progress tick.
             nm.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID, "Stem separation",
-                    NotificationManager.IMPORTANCE_LOW
-                ).apply { setShowBadge(false) }
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                }
             )
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
