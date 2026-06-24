@@ -27,26 +27,41 @@ class LocaleController extends StateNotifier<Locale?> {
 
   static Locale? _parse(String? raw) {
     if (raw == null || raw.isEmpty) return null;
-    final parts = raw.split('_');
-    return switch (parts.length) {
-      1 => Locale(parts[0]),
-      2 => Locale(parts[0], parts[1]),
-      _ => Locale.fromSubtags(
-          languageCode: parts[0],
-          scriptCode: parts[1],
-          countryCode: parts[2],
-        ),
-    };
+    final parts = raw.split('_').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return null;
+    if (parts.length == 1) return Locale(parts[0]);
+    // BCP-47 disambiguation: 4-char Title-cased segments are script
+    // subtags (Hans, Hant, Latn); everything else is a region code (TW,
+    // US, 419). Avoids the trap of feeding `countryCode: ''` to
+    // Locale.fromSubtags, which would store '' as the literal country
+    // and break supportedLocales matching.
+    final languageCode = parts[0];
+    String? scriptCode;
+    String? countryCode;
+    for (final p in parts.skip(1)) {
+      if (p.length == 4) {
+        scriptCode = p;
+      } else {
+        countryCode = p;
+      }
+    }
+    return Locale.fromSubtags(
+      languageCode: languageCode,
+      scriptCode: scriptCode,
+      countryCode: countryCode,
+    );
   }
 
   static String _encode(Locale l) {
-    if (l.scriptCode == null && l.countryCode == null) {
-      return l.languageCode;
-    }
-    if (l.scriptCode == null) {
-      return '${l.languageCode}_${l.countryCode}';
-    }
-    return '${l.languageCode}_${l.scriptCode}_${l.countryCode ?? ''}';
+    // Join only non-null subtags so a script-only locale (eg. zh_Hans
+    // with no region) doesn't serialize to "zh_Hans_" with a trailing
+    // underscore that round-trips into an invalid Locale.
+    final parts = <String>[
+      l.languageCode,
+      if (l.scriptCode != null) l.scriptCode!,
+      if (l.countryCode != null) l.countryCode!,
+    ];
+    return parts.join('_');
   }
 
   /// Pass `null` to revert to "follow OS".

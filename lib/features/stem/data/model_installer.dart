@@ -78,8 +78,16 @@ class ModelInstaller {
   /// disk — caller should kick off [install] in that case.
   static Future<String?> resolveGraphPath(StemModelConfig config) async {
     final dir = await modelsDir();
-    final installed = File('${dir.path}/${config.graphFile}');
-    if (installed.existsSync()) return installed.path;
+    // Full install — including the sibling .weights blob — must be
+    // present. Falling back to just the .onnx existence check skips the
+    // download dialog after a partial install (graph done, weights
+    // interrupted), then hands an incomplete model to ORT which crashes
+    // on mmap'ing the missing weights file.
+    if (await isInstalled(config)) {
+      return '${dir.path}/${config.graphFile}';
+    }
+    // Dev fallback: assume manually adb-pushed alongside its weights;
+    // no per-asset audit (the dev knows what they pushed).
     final dev = File('/data/local/tmp/${config.graphFile}');
     if (dev.existsSync()) return dev.path;
     return null;
