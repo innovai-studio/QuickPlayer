@@ -900,15 +900,29 @@ class _StemAction extends ConsumerWidget {
     }
 
     if (state.status == StemStatus.separating) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        child: Center(
-          child: SizedBox(
-            width: 20, height: 20,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: AppColors.primaryStart),
-          ),
+      // Tap the spinner to (re)open the progress dialog — covers the
+      // swipe-away-and-resume path where the controller auto-attaches to
+      // a still-running service and the user wants to peek at progress.
+      return IconButton(
+        tooltip: 'Stem separation',
+        icon: const SizedBox(
+          width: 20, height: 20,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.primaryStart),
         ),
+        onPressed: () async {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const StemProgressDialog(),
+          );
+          final after = ref.read(stemControllerProvider(track.id));
+          if (after.status == StemStatus.ready &&
+              after.stems != null &&
+              context.mounted) {
+            _openMixer(context, ref, track, after.stems!);
+          }
+        },
       );
     }
 
