@@ -68,7 +68,11 @@ android {
 
     defaultConfig {
         applicationId = "com.quickplayer.quickplayer"
-        minSdk = flutter.minSdkVersion
+        // 24 (Android 7.0) required by onnxruntime-android 1.26+.
+        // Devices on API 21-23 (Lollipop / Marshmallow) are ~0.x% of
+        // the install base by mid-2026 and wouldn't survive the stem
+        // pipeline's RAM footprint anyway.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -103,7 +107,12 @@ dependencies {
     // -android package (not -mobile) bundles the NNAPI execution
     // provider and ships XNNPACK-backed CPU kernels, which we need to
     // hit the <5 min/song target -- see docs/STEM_ONNX_EXPORT_SPIKE.md.
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+    // Bumped from 1.20.0 to 1.26.0 to pick up 16 KB page-size alignment
+    // for libonnxruntime4j_jni.so. Play Console blocks AABs with any
+    // native lib whose LOAD segments use a 0x1000 (4 KB) Align — 1.20's
+    // JNI wrapper still shipped 4 KB-aligned even though the main
+    // libonnxruntime.so was already 16 KB.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.26.0'
 
     // media3 ExoPlayer for the 4-track stem mixer. just_audio_background
     // hard-refuses a second just_audio instance, so the mixer drives four
